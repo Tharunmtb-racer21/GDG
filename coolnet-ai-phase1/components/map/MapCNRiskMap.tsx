@@ -9,6 +9,10 @@ type Popup = maplibregl.Popup;
 
 import type { WardSummary } from "@/lib/types";
 import { RISK_COLORS } from "@/lib/utils/risk";
+import { getFeatureCentroid } from "@/lib/utils/geo";
+import { getCurrentWeather } from "@/lib/services/weatherService";
+import { calculateHeatStress } from "@/lib/utils/heatStress";
+import { SelectedAreaMeta } from "@/components/panels/SelectedAreaPanel";
 import {
   MapControls,
   MapLegend,
@@ -22,7 +26,7 @@ import {
 export interface MapCNRiskMapProps {
   summaries: WardSummary[];
   selectedWardId: string | null;
-  onSelectWard: (wardId: string) => void;
+  onSelectWard: (wardId: string, areaMeta?: SelectedAreaMeta) => void;
   focusCenter?: [number, number] | null;
 }
 
@@ -43,6 +47,7 @@ export function MapCNRiskMap({
   const [selectedTime, setSelectedTime] = useState<string>("NOW");
   const [currentZoom, setCurrentZoom] = useState<number>(INDIA_DEFAULT_ZOOM);
   const [breadcrumb, setBreadcrumb] = useState<string[]>(["INDIA"]);
+  const [selectedFeatureId, setSelectedFeatureId] = useState<string | number | null>(null);
 
   const [statesGeoJSON, setStatesGeoJSON] = useState<any>(null);
   const [districtsGeoJSON, setDistrictsGeoJSON] = useState<any>(null);
@@ -55,7 +60,7 @@ export function MapCNRiskMap({
     return map;
   }, [summaries]);
 
-  // Load GeoJSON data files
+  // Load GeoJSON datasets
   useEffect(() => {
     let isMounted = true;
     Promise.all([
@@ -73,7 +78,7 @@ export function MapCNRiskMap({
     };
   }, []);
 
-  // Compute color based on value & layer
+  // Metric color scale generator
   const getColorForMetric = (props: any, layerType: MapActiveLayer) => {
     if (layerType === "compound") {
       const score = props.compound_risk ?? props.compound_score ?? 50;
@@ -84,24 +89,24 @@ export function MapCNRiskMap({
     }
     if (layerType === "heat") {
       const hi = props.heat_index ?? 40;
-      if (hi >= 48) return "#dc2626"; // Extreme
-      if (hi >= 42) return "#f97316"; // High
-      if (hi >= 35) return "#eab308"; // Moderate
-      return "#10b981"; // Low
+      if (hi >= 48) return "#dc2626";
+      if (hi >= 42) return "#f97316";
+      if (hi >= 35) return "#eab308";
+      return "#10b981";
     }
     if (layerType === "grid") {
       const grid = props.grid_stress ?? 60;
-      if (grid >= 80) return "#9333ea"; // Critical
-      if (grid >= 65) return "#f43f5e"; // High
-      if (grid >= 40) return "#f59e0b"; // Moderate
-      return "#14b8a6"; // Low
+      if (grid >= 80) return "#9333ea";
+      if (grid >= 65) return "#f43f5e";
+      if (grid >= 40) return "#f59e0b";
+      return "#14b8a6";
     }
     if (layerType === "vulnerability") {
       const vuln = props.vulnerability ?? 50;
-      if (vuln >= 80) return "#4f46e5"; // Severe
-      if (vuln >= 60) return "#3b82f6"; // High
-      if (vuln >= 40) return "#0284c7"; // Moderate
-      return "#06b6d4"; // Low
+      if (vuln >= 80) return "#4f46e5";
+      if (vuln >= 60) return "#3b82f6";
+      if (vuln >= 40) return "#0284c7";
+      return "#06b6d4";
     }
     if (layerType === "temperature") {
       const t = props.temperature ?? 38;
@@ -113,7 +118,7 @@ export function MapCNRiskMap({
     return "#3b82f6";
   };
 
-  // Initialize MapLibre GL map instance
+  // Initialize MapLibre GL map
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
@@ -152,7 +157,7 @@ export function MapCNRiskMap({
     mapRef.current = map;
 
     popupRef.current = new maplibregl.Popup({
-      closeButton: false,
+      closeButton: true,
       closeOnClick: false,
       className: "coolnet-mapcn-popup",
     });
@@ -167,7 +172,7 @@ export function MapCNRiskMap({
     };
   }, []);
 
-  // Add / Update Map Sources and Layers when GeoJSON data or activeLayer changes
+  // Update GeoJSON Sources and Layers
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -196,7 +201,6 @@ export function MapCNRiskMap({
             generateId: true,
           });
 
-          // States Fill
           map.addLayer({
             id: "states-fill",
             type: "fill",
@@ -206,6 +210,8 @@ export function MapCNRiskMap({
               "fill-color": ["get", "color"],
               "fill-opacity": [
                 "case",
+                ["boolean", ["feature-state", "selected"], false],
+                0.9,
                 ["boolean", ["feature-state", "hover"], false],
                 0.85,
                 0.55,
@@ -213,7 +219,6 @@ export function MapCNRiskMap({
             },
           });
 
-          // States Outline
           map.addLayer({
             id: "states-outline",
             type: "line",
@@ -222,12 +227,16 @@ export function MapCNRiskMap({
             paint: {
               "line-color": [
                 "case",
+                ["boolean", ["feature-state", "selected"], false],
+                "#f4f6f9",
                 ["boolean", ["feature-state", "hover"], false],
                 "#3b82f6",
                 "#0f172a",
               ],
               "line-width": [
                 "case",
+                ["boolean", ["feature-state", "selected"], false],
+                3.0,
                 ["boolean", ["feature-state", "hover"], false],
                 2.5,
                 1.2,
@@ -246,22 +255,6 @@ export function MapCNRiskMap({
               const feature = e.features[0];
               stateHoverId = feature.id as number;
               map.setFeatureState({ source: "india-states-src", id: stateHoverId }, { hover: true });
-
-              const p = feature.properties;
-              const html = `
-                <div style="font-family: inherit; padding: 4px; min-width: 170px;">
-                  <div style="font-weight: 800; font-size: 14px; color: #38bdf8; text-transform: uppercase; margin-bottom: 4px;">
-                    ${p.state_name}
-                  </div>
-                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 6px; font-size: 11px;">
-                    <div><span style="color: #64748b;">Temp:</span> <strong style="color: #f1f5f9;">${p.temperature}°C</strong></div>
-                    <div><span style="color: #64748b;">Heat Index:</span> <strong style="color: #f1f5f9;">${p.heat_index}°C</strong></div>
-                    <div><span style="color: #64748b;">Grid Stress:</span> <strong style="color: #f1f5f9;">${p.grid_stress}%</strong></div>
-                    <div><span style="color: #64748b;">Compound Risk:</span> <strong style="color: #f1f5f9;">${p.compound_risk}/100</strong></div>
-                  </div>
-                </div>
-              `;
-              popupRef.current?.setLngLat(e.lngLat).setHTML(html).addTo(map);
             }
           });
 
@@ -271,21 +264,60 @@ export function MapCNRiskMap({
               map.setFeatureState({ source: "india-states-src", id: stateHoverId }, { hover: false });
               stateHoverId = null;
             }
-            popupRef.current?.remove();
           });
 
-          // State Click -> Zoom to State & Update Breadcrumb
-          map.on("click", "states-fill", (e) => {
+          // State Click -> Compute Centroid, Fetch Weather, Emit Selection & Show Map Popup
+          map.on("click", "states-fill", async (e) => {
             if (e.features && e.features.length > 0) {
-              const p = e.features[0].properties;
-              const center = JSON.parse(p.centroid || "[78, 20]");
+              const feature = e.features[0];
+              const p = feature.properties;
+              const [lat, lon] = getFeatureCentroid(feature);
+
+              setSelectedFeatureId(feature.id as number);
               setBreadcrumb(["INDIA", p.state_name]);
-              map.flyTo({
-                center: center,
-                zoom: 6.8,
-                duration: 900,
-                essential: true,
-              });
+
+              const areaMeta: SelectedAreaMeta = {
+                id: p.state_id,
+                name: p.state_name,
+                level: "state",
+                state: p.state_name,
+                lat,
+                lon,
+              };
+
+              onSelectWard(p.state_id, areaMeta);
+
+              // Fly to state
+              map.flyTo({ center: [lon, lat], zoom: 6.8, duration: 900 });
+
+              // Fetch live weather for Popup
+              const liveW = await getCurrentWeather(lat, lon);
+              const hs = calculateHeatStress(liveW.temperature, liveW.humidity, liveW.apparentTemperature);
+
+              const popupHtml = `
+                <div style="font-family: inherit; padding: 6px; min-width: 190px;">
+                  <div style="font-weight: 800; font-size: 14px; color: #38bdf8; text-transform: uppercase; margin-bottom: 2px;">
+                    ${p.state_name}
+                  </div>
+                  <div style="font-size: 10px; color: #94a3b8; margin-bottom: 6px; font-weight: 600;">
+                    ${liveW.status === "LIVE" ? "● WEATHER LIVE" : "● DEMO DATA"}
+                  </div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 6px; font-size: 11px;">
+                    <div><span style="color: #64748b;">Temp:</span> <strong style="color: #f1f5f9;">${liveW.temperature}°C</strong></div>
+                    <div><span style="color: #64748b;">Feels Like:</span> <strong style="color: #fca5a5;">${liveW.apparentTemperature}°C</strong></div>
+                    <div><span style="color: #64748b;">Humidity:</span> <strong style="color: #7dd3fc;">${liveW.humidity}%</strong></div>
+                    <div><span style="color: #64748b;">Wind:</span> <strong style="color: #5eead4;">${liveW.windSpeed} km/h</strong></div>
+                  </div>
+                  <div style="margin-top: 6px; padding-top: 4px; border-top: 1px dashed rgba(255,255,255,0.15); display: flex; justify-content: space-between; items-center;">
+                    <span style="font-size: 10px; color: #fb923c; font-weight: 700;">HEAT STRESS</span>
+                    <span style="font-size: 10px; font-weight: 800; color: #fdba74; background: rgba(251,146,60,0.2); padding: 2px 6px; border-radius: 4px;">
+                      ${hs.category} · ${hs.score}/100
+                    </span>
+                  </div>
+                </div>
+              `;
+
+              popupRef.current?.setLngLat(e.lngLat).setHTML(popupHtml).addTo(map);
             }
           });
         }
@@ -324,6 +356,8 @@ export function MapCNRiskMap({
               "fill-color": ["get", "color"],
               "fill-opacity": [
                 "case",
+                ["boolean", ["feature-state", "selected"], false],
+                0.9,
                 ["boolean", ["feature-state", "hover"], false],
                 0.85,
                 0.6,
@@ -340,12 +374,16 @@ export function MapCNRiskMap({
             paint: {
               "line-color": [
                 "case",
+                ["boolean", ["feature-state", "selected"], false],
+                "#f4f6f9",
                 ["boolean", ["feature-state", "hover"], false],
                 "#3b82f6",
                 "#05070a",
               ],
               "line-width": [
                 "case",
+                ["boolean", ["feature-state", "selected"], false],
+                3.0,
                 ["boolean", ["feature-state", "hover"], false],
                 2.5,
                 1.0,
@@ -364,21 +402,6 @@ export function MapCNRiskMap({
               const feature = e.features[0];
               districtHoverId = feature.id as number;
               map.setFeatureState({ source: "india-districts-src", id: districtHoverId }, { hover: true });
-
-              const p = feature.properties;
-              const html = `
-                <div style="font-family: inherit; padding: 4px; min-width: 170px;">
-                  <div style="font-weight: 800; font-size: 13px; color: #f8fafc; text-transform: uppercase;">${p.district_name}</div>
-                  <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">${p.state_name} District</div>
-                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 6px; font-size: 11px;">
-                    <div><span style="color: #64748b;">Temp:</span> <strong style="color: #f1f5f9;">${p.temperature}°C</strong></div>
-                    <div><span style="color: #64748b;">Heat Index:</span> <strong style="color: #f1f5f9;">${p.heat_index}°C</strong></div>
-                    <div><span style="color: #64748b;">Grid Stress:</span> <strong style="color: #f1f5f9;">${p.grid_stress}%</strong></div>
-                    <div><span style="color: #64748b;">Compound Risk:</span> <strong style="color: #f1f5f9;">${p.compound_risk}/100</strong></div>
-                  </div>
-                </div>
-              `;
-              popupRef.current?.setLngLat(e.lngLat).setHTML(html).addTo(map);
             }
           });
 
@@ -388,21 +411,54 @@ export function MapCNRiskMap({
               map.setFeatureState({ source: "india-districts-src", id: districtHoverId }, { hover: false });
               districtHoverId = null;
             }
-            popupRef.current?.remove();
           });
 
-          // District Click -> Zoom to District Wards & Update Breadcrumb
-          map.on("click", "districts-fill", (e) => {
+          // District Click -> Compute Centroid, Fetch Weather, Emit Selection & Show Map Popup
+          map.on("click", "districts-fill", async (e) => {
             if (e.features && e.features.length > 0) {
-              const p = e.features[0].properties;
-              const center = JSON.parse(p.centroid || "[77, 28]");
+              const feature = e.features[0];
+              const p = feature.properties;
+              const [lat, lon] = getFeatureCentroid(feature);
+
+              setSelectedFeatureId(feature.id as number);
               setBreadcrumb(["INDIA", p.state_name, p.district_name]);
-              map.flyTo({
-                center: center,
-                zoom: 11.2,
-                duration: 900,
-                essential: true,
-              });
+
+              const areaMeta: SelectedAreaMeta = {
+                id: p.district_id,
+                name: p.district_name,
+                level: "district",
+                state: p.state_name,
+                district: p.district_name,
+                lat,
+                lon,
+              };
+
+              onSelectWard(p.district_id, areaMeta);
+              map.flyTo({ center: [lon, lat], zoom: 11.2, duration: 900 });
+
+              const liveW = await getCurrentWeather(lat, lon);
+              const hs = calculateHeatStress(liveW.temperature, liveW.humidity, liveW.apparentTemperature);
+
+              const popupHtml = `
+                <div style="font-family: inherit; padding: 6px; min-width: 190px;">
+                  <div style="font-weight: 800; font-size: 13px; color: #f8fafc; text-transform: uppercase;">${p.district_name}</div>
+                  <div style="font-size: 10px; color: #94a3b8; margin-bottom: 4px;">${p.state_name} District</div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 6px; font-size: 11px;">
+                    <div><span style="color: #64748b;">Temp:</span> <strong style="color: #f1f5f9;">${liveW.temperature}°C</strong></div>
+                    <div><span style="color: #64748b;">Feels Like:</span> <strong style="color: #fca5a5;">${liveW.apparentTemperature}°C</strong></div>
+                    <div><span style="color: #64748b;">Humidity:</span> <strong style="color: #7dd3fc;">${liveW.humidity}%</strong></div>
+                    <div><span style="color: #64748b;">Wind:</span> <strong style="color: #5eead4;">${liveW.windSpeed} km/h</strong></div>
+                  </div>
+                  <div style="margin-top: 6px; padding-top: 4px; border-top: 1px dashed rgba(255,255,255,0.15); display: flex; justify-content: space-between; items-center;">
+                    <span style="font-size: 10px; color: #fb923c; font-weight: 700;">HEAT STRESS</span>
+                    <span style="font-size: 10px; font-weight: 800; color: #fdba74; background: rgba(251,146,60,0.2); padding: 2px 6px; border-radius: 4px;">
+                      ${hs.category} · ${hs.score}/100
+                    </span>
+                  </div>
+                </div>
+              `;
+
+              popupRef.current?.setLngLat(e.lngLat).setHTML(popupHtml).addTo(map);
             }
           });
         }
@@ -467,7 +523,7 @@ export function MapCNRiskMap({
               "fill-opacity": [
                 "case",
                 ["boolean", ["feature-state", "selected"], false],
-                0.85,
+                0.9,
                 ["boolean", ["feature-state", "hover"], false],
                 0.8,
                 0.6,
@@ -492,7 +548,7 @@ export function MapCNRiskMap({
               "line-width": [
                 "case",
                 ["boolean", ["feature-state", "selected"], false],
-                2.5,
+                3.0,
                 ["boolean", ["feature-state", "hover"], false],
                 2.0,
                 1.0,
@@ -511,26 +567,6 @@ export function MapCNRiskMap({
               const feature = e.features[0];
               wardHoverId = feature.id as number;
               map.setFeatureState({ source: "coolnet-wards-src", id: wardHoverId }, { hover: true });
-
-              const p = feature.properties;
-              const html = `
-                <div style="font-family: inherit; padding: 4px; min-width: 170px;">
-                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px;">
-                    <span style="font-weight: 700; font-size: 13px; color: #f8fafc;">${p.name}</span>
-                    <span style="background-color: ${p.color}; color: #020617; font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">
-                      ${p.risk_level}
-                    </span>
-                  </div>
-                  <div style="font-size: 11px; color: #94a3b8; margin-bottom: 6px;">${p.district}</div>
-                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 6px; font-size: 11px;">
-                    <div><span style="color: #64748b;">Risk:</span> <strong style="color: #f1f5f9;">${p.compound_score}/100</strong></div>
-                    <div><span style="color: #64748b;">Temp:</span> <strong style="color: #f1f5f9;">${p.temperature}°C</strong></div>
-                    <div><span style="color: #64748b;">Grid Stress:</span> <strong style="color: #f1f5f9;">${p.grid_stress}%</strong></div>
-                    <div><span style="color: #64748b;">Vulnerability:</span> <strong style="color: #f1f5f9;">${p.vulnerability}</strong></div>
-                  </div>
-                </div>
-              `;
-              popupRef.current?.setLngLat(e.lngLat).setHTML(html).addTo(map);
             }
           });
 
@@ -540,16 +576,59 @@ export function MapCNRiskMap({
               map.setFeatureState({ source: "coolnet-wards-src", id: wardHoverId }, { hover: false });
               wardHoverId = null;
             }
-            popupRef.current?.remove();
           });
 
-          // Ward Click -> Updates Dashboard Selected Ward State
-          map.on("click", "wards-fill", (e) => {
+          // Ward Click -> Compute Centroid, Fetch Weather, Emit Selection & Show Map Popup
+          map.on("click", "wards-fill", async (e) => {
             if (e.features && e.features.length > 0) {
-              const p = e.features[0].properties;
+              const feature = e.features[0];
+              const p = feature.properties;
+              const [lat, lon] = getFeatureCentroid(feature);
+
+              setSelectedFeatureId(feature.id as number);
+
               if (p.ward_id) {
-                onSelectWard(p.ward_id);
+                const areaMeta: SelectedAreaMeta = {
+                  id: p.ward_id,
+                  name: p.name,
+                  level: "ward",
+                  state: "Delhi",
+                  district: p.district || "Central Delhi",
+                  lat,
+                  lon,
+                };
+
+                onSelectWard(p.ward_id, areaMeta);
                 setBreadcrumb(["INDIA", "DELHI", p.district || "CENTRAL DELHI", p.name]);
+
+                const liveW = await getCurrentWeather(lat, lon);
+                const hs = calculateHeatStress(liveW.temperature, liveW.humidity, liveW.apparentTemperature);
+
+                const popupHtml = `
+                  <div style="font-family: inherit; padding: 6px; min-width: 190px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px;">
+                      <span style="font-weight: 700; font-size: 13px; color: #f8fafc;">${p.name}</span>
+                      <span style="background-color: ${p.color}; color: #020617; font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">
+                        ${p.risk_level}
+                      </span>
+                    </div>
+                    <div style="font-size: 11px; color: #94a3b8; margin-bottom: 6px;">${p.district}</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 6px; font-size: 11px;">
+                      <div><span style="color: #64748b;">Temp:</span> <strong style="color: #f1f5f9;">${liveW.temperature}°C</strong></div>
+                      <div><span style="color: #64748b;">Feels Like:</span> <strong style="color: #fca5a5;">${liveW.apparentTemperature}°C</strong></div>
+                      <div><span style="color: #64748b;">Humidity:</span> <strong style="color: #7dd3fc;">${liveW.humidity}%</strong></div>
+                      <div><span style="color: #64748b;">Wind:</span> <strong style="color: #5eead4;">${liveW.windSpeed} km/h</strong></div>
+                    </div>
+                    <div style="margin-top: 6px; padding-top: 4px; border-top: 1px dashed rgba(255,255,255,0.15); display: flex; justify-content: space-between; items-center;">
+                      <span style="font-size: 10px; color: #fb923c; font-weight: 700;">HEAT STRESS</span>
+                      <span style="font-size: 10px; font-weight: 800; color: #fdba74; background: rgba(251,146,60,0.2); padding: 2px 6px; border-radius: 4px;">
+                        ${hs.category} · ${hs.score}/100
+                      </span>
+                    </div>
+                  </div>
+                `;
+
+                popupRef.current?.setLngLat(e.lngLat).setHTML(popupHtml).addTo(map);
               }
             }
           });
@@ -564,7 +643,7 @@ export function MapCNRiskMap({
     }
   }, [statesGeoJSON, districtsGeoJSON, wardsGeoJSON, activeLayer, summaryByWard, onSelectWard]);
 
-  // Handle selected ward feature state highlight
+  // Handle selected feature highlight
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !wardsGeoJSON || !wardsGeoJSON.features) return;
@@ -615,7 +694,6 @@ export function MapCNRiskMap({
     if (levelIndex === 0) {
       handleResetView();
     } else if (levelIndex === 1) {
-      // Zoom back to State level
       const stateName = newBreadcrumb[1];
       const stateFeat = statesGeoJSON?.features?.find((f: any) => f.properties.state_name === stateName);
       if (stateFeat) {
@@ -626,7 +704,6 @@ export function MapCNRiskMap({
         });
       }
     } else if (levelIndex === 2) {
-      // Zoom back to District level
       const districtName = newBreadcrumb[2];
       const districtFeat = districtsGeoJSON?.features?.find((f: any) => f.properties.district_name === districtName);
       if (districtFeat) {

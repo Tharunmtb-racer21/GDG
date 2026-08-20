@@ -27,7 +27,7 @@ export function RiskMap({
 }: {
   summaries: WardSummary[];
   selectedWardId: string | null;
-  onSelectWard: (wardId: string) => void;
+  onSelectWard: (wardId: string, areaMeta?: any) => void;
   focusCenter?: [number, number] | null;
   className?: string;
 }) {

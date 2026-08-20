@@ -5,7 +5,7 @@ import { TopNav } from "@/components/layout/TopNav";
 import type { DashboardTab } from "@/lib/dashboardTabs";
 import { DASHBOARD_TABS } from "@/lib/dashboardTabs";
 import { RiskMap } from "@/components/map/RiskMap";
-import { WardDetailPanel } from "@/components/panels/WardDetailPanel";
+import { WardDetailPanel, SelectedAreaMeta } from "@/components/panels/WardDetailPanel";
 import { ExplainabilityPanel } from "@/components/panels/ExplainabilityPanel";
 import { ForecastPanel } from "@/components/panels/ForecastPanel";
 import { WhatIfSimulator } from "@/components/panels/WhatIfSimulator";
@@ -23,6 +23,7 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<DashboardTab>("overview");
   const { summaries, loading } = useWardSummaries();
   const [selectedWardId, setSelectedWardId] = useState<string | null>(null);
+  const [selectedAreaMeta, setSelectedAreaMeta] = useState<SelectedAreaMeta | null>(null);
 
   const selectedWard = useMemo(
     () => summaries.find((s) => s.meta.ward_id === selectedWardId) ?? null,
@@ -30,16 +31,13 @@ export default function DashboardPage() {
   );
   const { explanation, forecast } = useWardInsights(selectedWard);
 
-  // Auto-select the highest-risk ward once data loads, for a populated first view.
-  useMemo(() => {
-    if (!selectedWardId && summaries.length > 0) {
-      const worst = [...summaries].sort(
-        (a, b) => b.compoundRisk.compound_risk_score - a.compoundRisk.compound_risk_score
-      )[0];
-      setSelectedWardId(worst.meta.ward_id);
+  // Unified callback for map polygon interactions (State, District, Ward)
+  const handleAreaSelect = (wardId: string, areaMeta?: SelectedAreaMeta) => {
+    setSelectedWardId(wardId);
+    if (areaMeta) {
+      setSelectedAreaMeta(areaMeta);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [summaries]);
+  };
 
   const cityStats = useMemo(() => {
     const critical = summaries.filter((s) => s.compoundRisk.risk_level === "CRITICAL").length;
@@ -118,7 +116,7 @@ export default function DashboardPage() {
                   <WardListSidebar
                     summaries={summaries}
                     selectedWardId={selectedWardId}
-                    onSelectWard={setSelectedWardId}
+                    onSelectWard={handleAreaSelect}
                   />
                 </Card>
 
@@ -126,14 +124,18 @@ export default function DashboardPage() {
                   <RiskMap
                     summaries={summaries}
                     selectedWardId={selectedWardId}
-                    onSelectWard={setSelectedWardId}
+                    onSelectWard={handleAreaSelect}
                     focusCenter={focusCenter}
                   />
                 </Card>
 
                 <div className="flex flex-col gap-3 overflow-y-auto lg:max-h-full">
                   <Card>
-                    <WardDetailPanel ward={selectedWard} forecast={forecast} />
+                    <WardDetailPanel
+                      ward={selectedWard}
+                      forecast={forecast}
+                      selectedArea={selectedAreaMeta}
+                    />
                   </Card>
                   <Card>
                     <ExplainabilityPanel explanation={explanation} />
@@ -152,19 +154,23 @@ export default function DashboardPage() {
                 <WardListSidebar
                   summaries={summaries}
                   selectedWardId={selectedWardId}
-                  onSelectWard={setSelectedWardId}
+                  onSelectWard={handleAreaSelect}
                 />
               </Card>
               <Card className="min-h-[400px] overflow-hidden">
                 <RiskMap
                   summaries={summaries}
                   selectedWardId={selectedWardId}
-                  onSelectWard={setSelectedWardId}
+                  onSelectWard={handleAreaSelect}
                   focusCenter={focusCenter}
                 />
               </Card>
               <Card className="overflow-y-auto">
-                <WardDetailPanel ward={selectedWard} forecast={forecast} />
+                <WardDetailPanel
+                  ward={selectedWard}
+                  forecast={forecast}
+                  selectedArea={selectedAreaMeta}
+                />
               </Card>
             </div>
           )}
@@ -175,7 +181,7 @@ export default function DashboardPage() {
                 <WardListSidebar
                   summaries={summaries}
                   selectedWardId={selectedWardId}
-                  onSelectWard={setSelectedWardId}
+                  onSelectWard={handleAreaSelect}
                 />
               </Card>
               <div className="flex flex-col gap-3 overflow-y-auto">
@@ -195,7 +201,7 @@ export default function DashboardPage() {
                 <WardListSidebar
                   summaries={summaries}
                   selectedWardId={selectedWardId}
-                  onSelectWard={setSelectedWardId}
+                  onSelectWard={handleAreaSelect}
                 />
               </Card>
               <Card className="overflow-y-auto">
@@ -205,7 +211,7 @@ export default function DashboardPage() {
                 <RiskMap
                   summaries={summaries}
                   selectedWardId={selectedWardId}
-                  onSelectWard={setSelectedWardId}
+                  onSelectWard={handleAreaSelect}
                   focusCenter={focusCenter}
                 />
               </Card>
