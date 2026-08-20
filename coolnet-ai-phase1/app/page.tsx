@@ -13,6 +13,7 @@ import { RecommendationPanel } from "@/components/panels/RecommendationPanel";
 import { DataHealthPanel } from "@/components/panels/DataHealthPanel";
 import { WardListSidebar } from "@/components/panels/WardListSidebar";
 import { InterventionsView } from "@/components/panels/InterventionsView";
+import { DistrictDetailModal } from "@/components/modals/DistrictDetailModal";
 import { StatCard } from "@/components/ui/StatCard";
 import { Card } from "@/components/ui/Card";
 import { useWardSummaries } from "@/lib/hooks/useWardSummaries";
@@ -24,6 +25,7 @@ export default function DashboardPage() {
   const { summaries, loading } = useWardSummaries();
   const [selectedWardId, setSelectedWardId] = useState<string | null>(null);
   const [selectedAreaMeta, setSelectedAreaMeta] = useState<SelectedAreaMeta | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
 
   const selectedWard = useMemo(
     () => summaries.find((s) => s.meta.ward_id === selectedWardId) ?? null,
@@ -31,11 +33,12 @@ export default function DashboardPage() {
   );
   const { explanation, forecast } = useWardInsights(selectedWard);
 
-  // Unified callback for map polygon interactions (State, District, Ward)
+  // Unified callback for map polygon and district list interactions
   const handleAreaSelect = (wardId: string, areaMeta?: SelectedAreaMeta) => {
     setSelectedWardId(wardId);
     if (areaMeta) {
       setSelectedAreaMeta(areaMeta);
+      setIsModalOpen(true);
     }
   };
 
@@ -59,8 +62,15 @@ export default function DashboardPage() {
   const focusCenter = selectedWard ? selectedWard.meta.centroid : null;
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-base-950">
+    <div className="flex h-screen flex-col overflow-hidden bg-base-950 font-sans">
       <TopNav activeTab={activeTab} onChangeTab={setActiveTab} />
+
+      {/* District & Area Risk Detail Modal */}
+      <DistrictDetailModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        areaMeta={selectedAreaMeta}
+      />
 
       {/* Mobile tab bar */}
       <div className="flex gap-1 overflow-x-auto border-b border-border bg-base-900 px-2 py-2 md:hidden">
@@ -111,7 +121,7 @@ export default function DashboardPage() {
                 />
               </div>
 
-              <div className="grid flex-1 grid-cols-1 gap-3 overflow-hidden p-3 lg:grid-cols-[240px_1fr_360px] lg:p-4">
+              <div className="grid flex-1 grid-cols-1 gap-3 overflow-hidden p-3 lg:grid-cols-[260px_1fr_360px] lg:p-4">
                 <Card className="hidden overflow-hidden lg:block">
                   <WardListSidebar
                     summaries={summaries}
