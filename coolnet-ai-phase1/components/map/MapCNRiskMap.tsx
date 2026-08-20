@@ -13,6 +13,7 @@ import { getFeatureCentroid } from "@/lib/utils/geo";
 import { getCurrentWeather } from "@/lib/services/weatherService";
 import { calculateHeatStress } from "@/lib/utils/heatStress";
 import { SelectedAreaMeta } from "@/components/panels/SelectedAreaPanel";
+import { ThermodynamicHeatFlowCanvas } from "./ThermodynamicHeatFlowCanvas";
 import {
   MapControls,
   MapLegend,
@@ -43,7 +44,8 @@ export function MapCNRiskMap({
   const mapRef = useRef<MapLibreMap | null>(null);
   const popupRef = useRef<Popup | null>(null);
 
-  const [activeLayer, setActiveLayer] = useState<MapActiveLayer>("compound");
+  // Default to Thermodynamic Heat Flow view!
+  const [activeLayer, setActiveLayer] = useState<MapActiveLayer>("thermodynamic");
   const [selectedTime, setSelectedTime] = useState<string>("NOW");
   const [currentZoom, setCurrentZoom] = useState<number>(INDIA_DEFAULT_ZOOM);
   const [breadcrumb, setBreadcrumb] = useState<string[]>(["INDIA"]);
@@ -78,8 +80,49 @@ export function MapCNRiskMap({
     };
   }, []);
 
-  // Metric color scale generator
+  // Metric color scale generator featuring WRI India Thermodynamic Land Surface Temperature
   const getColorForMetric = (props: any, layerType: MapActiveLayer) => {
+    if (layerType === "thermodynamic") {
+      const name = (props.state_name || props.district_name || props.name || "").toLowerCase();
+      // Mountain Alpine Cold Sinks (< 5°C to 15°C) -> Deep Blue / Cyan
+      if (name.includes("ladakh") || name.includes("kashmir")) return "#1e3a8a";
+      if (name.includes("himachal") || name.includes("sikkim") || name.includes("arunachal") || name.includes("uttarakhand")) return "#38bdf8";
+
+      // Moderate LST Regions (18–24°C) -> Yellow / Amber
+      if (
+        name.includes("assam") ||
+        name.includes("meghalaya") ||
+        name.includes("nagaland") ||
+        name.includes("manipur") ||
+        name.includes("mizoram") ||
+        name.includes("tripura")
+      )
+        return "#facc15";
+
+      // Warm LST Regions (25–29°C) -> Bright Orange
+      if (name.includes("punjab") || name.includes("haryana") || name.includes("bihar") || name.includes("bengal"))
+        return "#ea580c";
+
+      // Severe Thermodynamic Hotspots / Heat Domes (> 30°C to 38°C) -> Deep Crimson Red / Maroon
+      if (
+        name.includes("rajasthan") ||
+        name.includes("gujarat") ||
+        name.includes("madhya") ||
+        name.includes("maharashtra") ||
+        name.includes("telangana") ||
+        name.includes("tamil") ||
+        name.includes("andhra") ||
+        name.includes("karnataka") ||
+        name.includes("delhi") ||
+        name.includes("chhattisgarh") ||
+        name.includes("odisha") ||
+        name.includes("uttar pradesh")
+      )
+        return "#7f1d1d";
+
+      return "#dc2626";
+    }
+
     if (layerType === "compound") {
       const score = props.compound_risk ?? props.compound_score ?? 50;
       if (score >= 80) return RISK_COLORS.CRITICAL;
@@ -211,10 +254,10 @@ export function MapCNRiskMap({
               "fill-opacity": [
                 "case",
                 ["boolean", ["feature-state", "selected"], false],
-                0.9,
+                0.95,
                 ["boolean", ["feature-state", "hover"], false],
                 0.85,
-                0.55,
+                0.65,
               ],
             },
           });
@@ -230,7 +273,7 @@ export function MapCNRiskMap({
                 ["boolean", ["feature-state", "selected"], false],
                 "#f4f6f9",
                 ["boolean", ["feature-state", "hover"], false],
-                "#3b82f6",
+                "#f97316",
                 "#0f172a",
               ],
               "line-width": [
@@ -296,11 +339,11 @@ export function MapCNRiskMap({
 
               const popupHtml = `
                 <div style="font-family: inherit; padding: 6px; min-width: 190px;">
-                  <div style="font-weight: 800; font-size: 14px; color: #38bdf8; text-transform: uppercase; margin-bottom: 2px;">
+                  <div style="font-weight: 800; font-size: 14px; color: #f97316; text-transform: uppercase; margin-bottom: 2px;">
                     ${p.state_name}
                   </div>
                   <div style="font-size: 10px; color: #94a3b8; margin-bottom: 6px; font-weight: 600;">
-                    ${liveW.status === "LIVE" ? "● WEATHER LIVE" : "● DEMO DATA"}
+                    ♨️ LST THERMODYNAMIC FLOW ACTIVE
                   </div>
                   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 6px; font-size: 11px;">
                     <div><span style="color: #64748b;">Temp:</span> <strong style="color: #f1f5f9;">${liveW.temperature}°C</strong></div>
@@ -357,10 +400,10 @@ export function MapCNRiskMap({
               "fill-opacity": [
                 "case",
                 ["boolean", ["feature-state", "selected"], false],
-                0.9,
+                0.95,
                 ["boolean", ["feature-state", "hover"], false],
                 0.85,
-                0.6,
+                0.65,
               ],
             },
           });
@@ -377,7 +420,7 @@ export function MapCNRiskMap({
                 ["boolean", ["feature-state", "selected"], false],
                 "#f4f6f9",
                 ["boolean", ["feature-state", "hover"], false],
-                "#3b82f6",
+                "#f97316",
                 "#05070a",
               ],
               "line-width": [
@@ -523,7 +566,7 @@ export function MapCNRiskMap({
               "fill-opacity": [
                 "case",
                 ["boolean", ["feature-state", "selected"], false],
-                0.9,
+                0.95,
                 ["boolean", ["feature-state", "hover"], false],
                 0.8,
                 0.6,
@@ -542,7 +585,7 @@ export function MapCNRiskMap({
                 ["boolean", ["feature-state", "selected"], false],
                 "#f4f6f9",
                 ["boolean", ["feature-state", "hover"], false],
-                "#3b82f6",
+                "#f97316",
                 "#05070a",
               ],
               "line-width": [
@@ -729,6 +772,9 @@ export function MapCNRiskMap({
     <div className="relative h-full w-full overflow-hidden rounded-lg bg-base-950">
       {/* MapLibre Container */}
       <div ref={containerRef} className="h-full w-full" />
+
+      {/* Thermodynamic Heat Flow Particle Stream Canvas Overlay */}
+      <ThermodynamicHeatFlowCanvas isActive={activeLayer === "thermodynamic"} />
 
       {/* Top Left: Breadcrumb & Data Status Badge */}
       <div className="pointer-events-none absolute left-3 top-3 z-10 flex flex-col gap-2">
