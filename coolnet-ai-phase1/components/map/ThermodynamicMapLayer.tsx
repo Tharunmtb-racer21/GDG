@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 
 export interface ThermodynamicMapLayerProps {
   isActive: boolean;
@@ -43,7 +43,7 @@ export function getWRITemperatureColor(temp: number): string {
 
 export function ThermodynamicMapLayer({
   isActive,
-  showSurfaceMesh = true,
+  showSurfaceMesh = false,
   showStreamlines = true,
 }: ThermodynamicMapLayerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -69,15 +69,13 @@ export function ThermodynamicMapLayer({
 
     window.addEventListener("resize", handleResize);
 
-    // Map latitude/longitude to canvas 2D screen coordinates (India Viewport Approximation)
+    // Map latitude/longitude to canvas 2D screen coordinates
     const latToY = (lat: number) => {
-      // Lat range: 6°N (bottom) to 37°N (top)
       const pct = (37.0 - lat) / (37.0 - 6.0);
       return pct * height * 0.85 + height * 0.08;
     };
 
     const lonToX = (lon: number) => {
-      // Lon range: 68°E (left) to 98°E (right)
       const pct = (lon - 68.0) / (98.0 - 68.0);
       return pct * width * 0.82 + width * 0.09;
     };
@@ -89,19 +87,15 @@ export function ThermodynamicMapLayer({
       let gradX = 0;
       let gradY = 0;
 
-      const pX = 0.005; // Spatial gradient delta
-      const pY = 0.005;
-
       for (const knot of THERMAL_KNOTS) {
         const kX = lonToX(knot.lon);
         const kY = latToY(knot.lat);
-        const distSq = (x - kX) * (x - kX) + (y - kY) * (y - kY) + 100; // Avoid divide-by-zero
+        const distSq = (x - kX) * (x - kX) + (y - kY) * (y - kY) + 100;
         const w = 1 / Math.pow(distSq, 1.25);
 
         weightSum += w;
         tempSum += knot.temp * w;
 
-        // Vector gradient force components (high temperature pushes away)
         const dX = x - kX;
         const dY = y - kY;
         gradX += dX * w * (knot.temp / 35);
@@ -112,8 +106,8 @@ export function ThermodynamicMapLayer({
       return { temp, dx: gradX, dy: gradY };
     };
 
-    // Initialize 2,000 Continuous Thermodynamic Streamline Particles
-    const STREAMLINE_COUNT = 2000;
+    // Initialize 2,000 Streamline Particles
+    const STREAMLINE_COUNT = 1800;
     interface StreamlineParticle {
       x: number;
       y: number;
@@ -130,62 +124,21 @@ export function ThermodynamicMapLayer({
       return {
         x,
         y,
-        speed: Math.random() * 1.8 + 0.8,
+        speed: Math.random() * 1.6 + 0.8,
         life: Math.random() * 120,
         maxLife: Math.random() * 140 + 60,
         temp: field.temp,
       };
     });
 
-    // Generate Background IDW Raster Heat Mesh (Offscreen Texture Buffer)
-    const offscreen = document.createElement("canvas");
-    offscreen.width = Math.floor(width / 6); // Downsampled for smooth 60fps performance
-    offscreen.height = Math.floor(height / 6);
-    const offCtx = offscreen.getContext("2d");
-
-    if (offCtx && showSurfaceMesh) {
-      const imgData = offCtx.createImageData(offscreen.width, offscreen.height);
-      const data = imgData.data;
-
-      for (let py = 0; py < offscreen.height; py++) {
-        for (let px = 0; px < offscreen.width; px++) {
-          const screenX = (px / offscreen.width) * width;
-          const screenY = (py / offscreen.height) * height;
-
-          const { temp } = sampleTemperatureField(screenX, screenY);
-          const colorHex = getWRITemperatureColor(temp);
-
-          // Convert HEX to RGB
-          const r = parseInt(colorHex.substring(1, 3), 16);
-          const g = parseInt(colorHex.substring(3, 5), 16);
-          const b = parseInt(colorHex.substring(5, 7), 16);
-
-          const idx = (py * offscreen.width + px) * 4;
-          data[idx] = r;
-          data[idx + 1] = g;
-          data[idx + 2] = b;
-          data[idx + 3] = 160; // 0.62 Opacity
-        }
-      }
-      offCtx.putImageData(imgData, 0, 0);
-    }
-
     // MAIN ANIMATION RENDER LOOP
     const render = () => {
-      // Subtle background trail clearing for smooth streamline motion trails
-      ctx.fillStyle = "rgba(2, 6, 23, 0.15)";
-      ctx.fillRect(0, 0, width, height);
+      // Clear canvas with transparent clear rect to keep MapLibre polygon shapes 100% crisp & bounded
+      ctx.clearRect(0, 0, width, height);
 
-      // 1. Draw Interpolated Background Surface Mesh
-      if (showSurfaceMesh && offscreen) {
-        ctx.globalAlpha = 0.55;
-        ctx.drawImage(offscreen, 0, 0, width, height);
-        ctx.globalAlpha = 1.0;
-      }
-
-      // 2. Draw Thermodynamic Streamline Particles (Vector Flow along Heat Gradients)
+      // Render Thermodynamic Streamline Particles (Vector Flow along Heat Gradients)
       if (showStreamlines) {
-        ctx.lineWidth = 1.6;
+        ctx.lineWidth = 1.8;
         ctx.lineCap = "round";
 
         for (let i = 0; i < particles.length; i++) {
@@ -193,18 +146,15 @@ export function ThermodynamicMapLayer({
           const field = sampleTemperatureField(p.x, p.y);
           p.temp = field.temp;
 
-          // Velocity vector: angle follows thermal pressure gradient tangents with subtle fluid swirl
           const flowAngle =
             Math.atan2(field.dy, field.dx) + Math.sin(p.x * 0.012 + p.y * 0.012) * 0.35;
 
-          // Speed accelerates in high-heat core regions (> 35°C)
           const accel = 1.0 + Math.max(0, (field.temp - 25) / 18);
           const stepSpeed = p.speed * accel;
 
           const nextX = p.x + Math.cos(flowAngle) * stepSpeed * 2.2;
           const nextY = p.y + Math.sin(flowAngle) * stepSpeed * 2.2;
 
-          // Render glowing line segment matching local temperature color
           ctx.beginPath();
           ctx.strokeStyle = getWRITemperatureColor(field.temp);
           ctx.globalAlpha = Math.min(1.0, (1 - p.life / p.maxLife) * 0.85);
@@ -212,12 +162,10 @@ export function ThermodynamicMapLayer({
           ctx.lineTo(nextX, nextY);
           ctx.stroke();
 
-          // Advance particle position & lifecycle
           p.x = nextX;
           p.y = nextY;
           p.life += 1;
 
-          // Reset particle when life expires or strays offscreen
           if (p.life >= p.maxLife || p.x < 0 || p.x > width || p.y < 0 || p.y > height) {
             p.x = Math.random() * width;
             p.y = Math.random() * height;
@@ -244,7 +192,7 @@ export function ThermodynamicMapLayer({
   return (
     <canvas
       ref={canvasRef}
-      className="pointer-events-none absolute inset-0 z-0 h-full w-full mix-blend-screen opacity-90"
+      className="pointer-events-none absolute inset-0 z-10 h-full w-full mix-blend-screen opacity-90"
     />
   );
 }
