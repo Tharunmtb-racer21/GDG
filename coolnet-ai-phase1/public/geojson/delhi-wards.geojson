@@ -1,0 +1,264 @@
+{
+  "type": "FeatureCollection",
+  "name": "delhi_wards_demo",
+  "crs": {
+    "type": "name",
+    "properties": {
+      "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
+    }
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "ward_id": "W-01",
+        "name": "Sadar Bazar",
+        "district": "Central Delhi",
+        "state": "Delhi"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [77.200, 28.665],
+            [77.220, 28.665],
+            [77.220, 28.645],
+            [77.200, 28.645],
+            [77.200, 28.665]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ward_id": "W-02",
+        "name": "Chandni Chowk",
+        "district": "Central Delhi",
+        "state": "Delhi"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [77.220, 28.665],
+            [77.240, 28.665],
+            [77.240, 28.645],
+            [77.220, 28.645],
+            [77.220, 28.665]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ward_id": "W-03",
+        "name": "Connaught Place",
+        "district": "New Delhi",
+        "state": "Delhi"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [77.200, 28.645],
+            [77.225, 28.645],
+            [77.225, 28.620],
+            [77.200, 28.620],
+            [77.200, 28.645]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ward_id": "W-04",
+        "name": "Karol Bagh",
+        "district": "Central Delhi",
+        "state": "Delhi"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [77.175, 28.665],
+            [77.200, 28.665],
+            [77.200, 28.640],
+            [77.175, 28.640],
+            [77.175, 28.665]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ward_id": "W-05",
+        "name": "Rohini",
+        "district": "North West Delhi",
+        "state": "Delhi"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [77.080, 28.740],
+            [77.140, 28.740],
+            [77.140, 28.690],
+            [77.080, 28.690],
+            [77.080, 28.740]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ward_id": "W-06",
+        "name": "Dwarka",
+        "district": "South West Delhi",
+        "state": "Delhi"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [77.020, 28.610],
+            [77.085, 28.610],
+            [77.085, 28.550],
+            [77.020, 28.550],
+            [77.020, 28.610]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ward_id": "W-07",
+        "name": "South Extension",
+        "district": "South Delhi",
+        "state": "Delhi"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [77.200, 28.590],
+            [77.235, 28.590],
+            [77.235, 28.555],
+            [77.200, 28.555],
+            [77.200, 28.590]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ward_id": "W-08",
+        "name": "Mayur Vihar",
+        "district": "East Delhi",
+        "state": "Delhi"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [77.270, 28.625],
+            [77.320, 28.625],
+            [77.320, 28.580],
+            [77.270, 28.580],
+            [77.270, 28.625]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ward_id": "W-09",
+        "name": "Lajpat Nagar",
+        "district": "South Delhi",
+        "state": "Delhi"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [77.235, 28.590],
+            [77.265, 28.590],
+            [77.265, 28.555],
+            [77.235, 28.555],
+            [77.235, 28.590]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ward_id": "W-10",
+        "name": "Okhla",
+        "district": "South East Delhi",
+        "state": "Delhi"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [77.265, 28.560],
+            [77.310, 28.560],
+            [77.310, 28.515],
+            [77.265, 28.515],
+            [77.265, 28.560]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ward_id": "W-11",
+        "name": "Civil Lines",
+        "district": "North Delhi",
+        "state": "Delhi"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [77.200, 28.705],
+            [77.240, 28.705],
+            [77.240, 28.665],
+            [77.200, 28.665],
+            [77.200, 28.705]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ward_id": "W-12",
+        "name": "Shahdara",
+        "district": "East Delhi",
+        "state": "Delhi"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [77.270, 28.690],
+            [77.330, 28.690],
+            [77.330, 28.630],
+            [77.270, 28.630],
+            [77.270, 28.690]
+          ]
+        ]
+      }
+    }
+  ]
+}

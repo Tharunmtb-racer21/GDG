@@ -1,103 +1,63 @@
 import type { WardGeometry, WardMeta } from "@/lib/types";
 
 /**
- * DEMO DATA NOTICE
+ * DEMO & PROTOTYPE DATA NOTICE
  * -----------------------------------------------------------------------
- * The wards, boundaries, and city below are entirely fictional
- * ("Demo Metro Area"). They are generated for Phase 1 UI development
- * only and do not represent any real municipality, utility territory,
- * or government dataset. Replace with real ward GIS data in Phase 2.
+ * The ward polygon geometries below represent Delhi NCR municipal zones.
+ * Prototype climate risk predictions are mapped to stable `ward_id` keys.
+ * Replace with official GIS files by updating `public/geojson/delhi-wards.geojson`.
  */
 
-const CITY_CENTER: [number, number] = [21.15, 79.09]; // arbitrary demo coordinate
-const GRID_COLS = 4;
-const GRID_ROWS = 3;
-const CELL_SIZE = 0.018; // degrees, ~2km
+export const CITY_META = {
+  name: "Delhi NCR Metro",
+  center: [28.6139, 77.2090] as [number, number], // Delhi NCR center
+  defaultZoom: 11,
+  note: "Prototype Risk Prediction · Demo GeoJSON Boundaries",
+};
 
 export const DEMO_WARD_NAMES = [
-  "Ward 1",
-  "Ward 2",
-  "Ward 3",
-  "Ward 4",
-  "Ward 5",
-  "Ward 6",
-  "Ward 7",
-  "Ward 8",
-  "Ward 9",
-  "Ward 10",
-  "Ward 11",
-  "Ward 12",
+  "Sadar Bazar",
+  "Chandni Chowk",
+  "Connaught Place",
+  "Karol Bagh",
+  "Rohini",
+  "Dwarka",
+  "South Extension",
+  "Mayur Vihar",
+  "Lajpat Nagar",
+  "Okhla",
+  "Civil Lines",
+  "Shahdara",
 ];
 
-/** Simple deterministic pseudo-random generator so demo data is stable across reloads. */
-function seededRandom(seed: number) {
-  let t = seed + 0x6d2b79f5;
-  return function () {
-    t += 0x6d2b79f5;
-    let r = Math.imul(t ^ (t >>> 15), 1 | t);
-    r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
-    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
-  };
-}
+export const DEMO_WARD_META: WardMeta[] = [
+  { ward_id: "W-01", name: "Sadar Bazar", region: "Central Delhi", population: 48200, centroid: [28.655, 77.210] },
+  { ward_id: "W-02", name: "Chandni Chowk", region: "Central Delhi", population: 52400, centroid: [28.655, 77.230] },
+  { ward_id: "W-03", name: "Connaught Place", region: "New Delhi", population: 31100, centroid: [28.632, 77.212] },
+  { ward_id: "W-04", name: "Karol Bagh", region: "Central Delhi", population: 44800, centroid: [28.652, 77.187] },
+  { ward_id: "W-05", name: "Rohini", region: "North West Delhi", population: 89000, centroid: [28.715, 77.110] },
+  { ward_id: "W-06", name: "Dwarka", region: "South West Delhi", population: 76500, centroid: [28.580, 77.052] },
+  { ward_id: "W-07", name: "South Extension", region: "South Delhi", population: 38900, centroid: [28.572, 77.217] },
+  { ward_id: "W-08", name: "Mayur Vihar", region: "East Delhi", population: 63200, centroid: [28.602, 77.295] },
+  { ward_id: "W-09", name: "Lajpat Nagar", region: "South Delhi", population: 41800, centroid: [28.572, 77.250] },
+  { ward_id: "W-10", name: "Okhla", region: "South East Delhi", population: 57600, centroid: [28.537, 77.287] },
+  { ward_id: "W-11", name: "Civil Lines", region: "North Delhi", population: 35400, centroid: [28.685, 77.220] },
+  { ward_id: "W-12", name: "Shahdara", region: "East Delhi", population: 71000, centroid: [28.660, 77.300] },
+];
 
-function buildGrid(): { meta: WardMeta[]; geometry: WardGeometry[] } {
-  const meta: WardMeta[] = [];
-  const geometry: WardGeometry[] = [];
-  const startLat = CITY_CENTER[0] + (GRID_ROWS / 2) * CELL_SIZE;
-  const startLng = CITY_CENTER[1] - (GRID_COLS / 2) * CELL_SIZE;
-  const rand = seededRandom(42);
+export const DEMO_WARD_GEOMETRY: WardGeometry[] = DEMO_WARD_META.map((m) => ({
+  ward_id: m.ward_id,
+  geojson: {
+    type: "Polygon",
+    coordinates: [
+      [
+        [m.centroid[1] - 0.015, m.centroid[0] + 0.015],
+        [m.centroid[1] + 0.015, m.centroid[0] + 0.015],
+        [m.centroid[1] + 0.015, m.centroid[0] - 0.015],
+        [m.centroid[1] - 0.015, m.centroid[0] - 0.015],
+        [m.centroid[1] - 0.015, m.centroid[0] + 0.015],
+      ],
+    ],
+  },
+}));
 
-  let index = 0;
-  for (let row = 0; row < GRID_ROWS; row++) {
-    for (let col = 0; col < GRID_COLS; col++) {
-      const wardId = `W-${String(index + 1).padStart(2, "0")}`;
-      const lat = startLat - row * CELL_SIZE;
-      const lng = startLng + col * CELL_SIZE;
-
-      // Add slight irregularity so polygons don't look like a perfect grid
-      const jitter = () => (rand() - 0.5) * CELL_SIZE * 0.15;
-
-      const nw: [number, number] = [lat + jitter(), lng + jitter()];
-      const ne: [number, number] = [lat + jitter(), lng + CELL_SIZE + jitter()];
-      const se: [number, number] = [lat - CELL_SIZE + jitter(), lng + CELL_SIZE + jitter()];
-      const sw: [number, number] = [lat - CELL_SIZE + jitter(), lng + jitter()];
-
-      const ring: [number, number][] = [nw, ne, se, sw, nw].map(([la, lo]) => [lo, la]);
-
-      const centroidLat = lat - CELL_SIZE / 2;
-      const centroidLng = lng + CELL_SIZE / 2;
-
-      meta.push({
-        ward_id: wardId,
-        name: DEMO_WARD_NAMES[index],
-        region: row < GRID_ROWS / 2 ? "North District" : "South District",
-        population: Math.round(18000 + rand() * 42000),
-        centroid: [centroidLat, centroidLng],
-      });
-
-      geometry.push({
-        ward_id: wardId,
-        geojson: {
-          type: "Polygon",
-          coordinates: [ring],
-        },
-      });
-
-      index++;
-    }
-  }
-
-  return { meta, geometry };
-}
-
-const { meta, geometry } = buildGrid();
-
-export const DEMO_WARD_META: WardMeta[] = meta;
-export const DEMO_WARD_GEOMETRY: WardGeometry[] = geometry;
-
-export const CITY_META = {
-  name: "Demo Metro Area",
-  center: CITY_CENTER,
-  defaultZoom: 12,
-  note: "Fictional city used for Phase 1 demo purposes only.",
-};
