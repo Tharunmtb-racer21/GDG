@@ -13,7 +13,8 @@ import { getFeatureCentroid } from "@/lib/utils/geo";
 import { getCurrentWeather } from "@/lib/services/weatherService";
 import { calculateHeatStress } from "@/lib/utils/heatStress";
 import { SelectedAreaMeta } from "@/components/panels/SelectedAreaPanel";
-import { ThermodynamicHeatFlowCanvas } from "./ThermodynamicHeatFlowCanvas";
+import { ThermodynamicMapLayer } from "./ThermodynamicMapLayer";
+import { ThermodynamicLegend } from "./ThermodynamicLegend";
 import {
   MapControls,
   MapLegend,
@@ -50,6 +51,10 @@ export function MapCNRiskMap({
   const [currentZoom, setCurrentZoom] = useState<number>(INDIA_DEFAULT_ZOOM);
   const [breadcrumb, setBreadcrumb] = useState<string[]>(["INDIA"]);
   const [selectedFeatureId, setSelectedFeatureId] = useState<string | number | null>(null);
+
+  // Thermodynamic Layer Controls
+  const [showSurfaceMesh, setShowSurfaceMesh] = useState<boolean>(true);
+  const [showStreamlines, setShowStreamlines] = useState<boolean>(true);
 
   const [statesGeoJSON, setStatesGeoJSON] = useState<any>(null);
   const [districtsGeoJSON, setDistrictsGeoJSON] = useState<any>(null);
@@ -329,11 +334,8 @@ export function MapCNRiskMap({
               };
 
               onSelectWard(p.state_id, areaMeta);
-
-              // Fly to state
               map.flyTo({ center: [lon, lat], zoom: 6.8, duration: 900 });
 
-              // Fetch live weather for Popup
               const liveW = await getCurrentWeather(lat, lon);
               const hs = calculateHeatStress(liveW.temperature, liveW.humidity, liveW.apparentTemperature);
 
@@ -456,7 +458,6 @@ export function MapCNRiskMap({
             }
           });
 
-          // District Click -> Compute Centroid, Fetch Weather, Emit Selection & Show Map Popup
           map.on("click", "districts-fill", async (e) => {
             if (e.features && e.features.length > 0) {
               const feature = e.features[0];
@@ -621,7 +622,6 @@ export function MapCNRiskMap({
             }
           });
 
-          // Ward Click -> Compute Centroid, Fetch Weather, Emit Selection & Show Map Popup
           map.on("click", "wards-fill", async (e) => {
             if (e.features && e.features.length > 0) {
               const feature = e.features[0];
@@ -773,8 +773,12 @@ export function MapCNRiskMap({
       {/* MapLibre Container */}
       <div ref={containerRef} className="h-full w-full" />
 
-      {/* Thermodynamic Heat Flow Particle Stream Canvas Overlay */}
-      <ThermodynamicHeatFlowCanvas isActive={activeLayer === "thermodynamic"} />
+      {/* 2-Tier Thermodynamic WebGL / Canvas Layer (IDW Surface Mesh + 2,000 Vector Particle Streamlines) */}
+      <ThermodynamicMapLayer
+        isActive={activeLayer === "thermodynamic"}
+        showSurfaceMesh={showSurfaceMesh}
+        showStreamlines={showStreamlines}
+      />
 
       {/* Top Left: Breadcrumb & Data Status Badge */}
       <div className="pointer-events-none absolute left-3 top-3 z-10 flex flex-col gap-2">
@@ -800,7 +804,7 @@ export function MapCNRiskMap({
         />
       </div>
 
-      {/* Bottom Right: Controls & Dynamic Legend */}
+      {/* Bottom Right: Controls & WRI Thermodynamic Legend */}
       <div className="pointer-events-none absolute bottom-4 right-4 z-10 flex flex-col items-end gap-3">
         <MapControls
           onZoomIn={handleZoomIn}
@@ -809,7 +813,17 @@ export function MapCNRiskMap({
           onToggleFullscreen={handleToggleFullscreen}
           className="pointer-events-auto"
         />
-        <MapLegend activeLayer={activeLayer} className="pointer-events-auto" />
+        {activeLayer === "thermodynamic" ? (
+          <ThermodynamicLegend
+            showSurfaceMesh={showSurfaceMesh}
+            showStreamlines={showStreamlines}
+            onToggleMesh={setShowSurfaceMesh}
+            onToggleStreamlines={setShowStreamlines}
+            className="pointer-events-auto"
+          />
+        ) : (
+          <MapLegend activeLayer={activeLayer} className="pointer-events-auto" />
+        )}
       </div>
     </div>
   );
