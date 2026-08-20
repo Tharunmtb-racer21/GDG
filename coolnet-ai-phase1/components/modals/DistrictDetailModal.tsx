@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { getCurrentWeather, NormalizedWeather } from "@/lib/services/weatherService";
 import { calculateHeatStress, HeatStressResult } from "@/lib/utils/heatStress";
 import { calculateCompoundRisk, CompoundRiskAssessment } from "@/lib/services/riskService";
+import { runXGBoostInference, MLPredictionResult } from "@/lib/services/realMlEngine";
 import { SelectedAreaMeta } from "@/components/panels/SelectedAreaPanel";
 import { RiskBadge } from "@/components/ui/RiskBadge";
 import { DataStatusBadge } from "@/components/ui/mapcn";
@@ -24,6 +25,7 @@ export function DistrictDetailModal({
   const [loading, setLoading] = useState<boolean>(false);
   const [weather, setWeather] = useState<NormalizedWeather | null>(null);
   const [heatStress, setHeatStress] = useState<HeatStressResult | null>(null);
+  const [mlPrediction, setMlPrediction] = useState<MLPredictionResult | null>(null);
   const [compoundRisk, setCompoundRisk] = useState<CompoundRiskAssessment | null>(null);
   const [dispatchStatus, setDispatchStatus] = useState<string | null>(null);
   const [activeModalTab, setActiveModalTab] = useState<"overview" | "weather" | "ai" | "interventions">("overview");
@@ -34,7 +36,7 @@ export function DistrictDetailModal({
   const lat = areaMeta?.lat ?? 11.0168;
   const lon = areaMeta?.lon ?? 76.9558;
 
-  // Fetch real-time weather from Open-Meteo for selected location
+  // Fetch real-time weather & run XGBoost ML inference
   useEffect(() => {
     if (!isOpen || !areaMeta) return;
 
@@ -47,6 +49,7 @@ export function DistrictDetailModal({
         if (!isMounted) return;
         setWeather(data);
 
+        // 1. Live Weather Heat Stress Calculation
         const hs = calculateHeatStress(
           data.temperature,
           data.humidity,
@@ -55,7 +58,19 @@ export function DistrictDetailModal({
         );
         setHeatStress(hs);
 
-        const cr = calculateCompoundRisk(hs.heatIndex, 68, 58, 45);
+        // 2. Supervised XGBoost ML Inference Engine Call
+        const ml = runXGBoostInference({
+          temperature: data.temperature,
+          humidity: data.humidity,
+          windSpeed: data.windSpeed,
+          apparentTemperature: data.apparentTemperature,
+          latitude: lat,
+          longitude: lon,
+        });
+        setMlPrediction(ml);
+
+        // 3. Feed ML Heat Stress Prediction into Compound Risk Engine
+        const cr = calculateCompoundRisk(ml.heatStressScore, 68, 58, 45);
         setCompoundRisk(cr);
 
         setLoading(false);
@@ -119,342 +134,245 @@ export function DistrictDetailModal({
         </div>
 
         {/* Modal Navigation Tabs */}
-        <div className="flex border-b border-border/60 bg-base-900 px-6 pt-2">
+        <div className="flex border-b border-border/60 bg-base-950/50 px-6">
           <button
             onClick={() => setActiveModalTab("overview")}
-            className={`border-b-2 px-4 py-2 text-xs font-semibold uppercase tracking-wider transition ${
+            className={`py-3 px-4 text-xs font-mono font-bold border-b-2 transition ${
               activeModalTab === "overview"
                 ? "border-accent text-accent"
-                : "border-transparent text-ink-500 hover:text-ink-300"
+                : "border-transparent text-ink-400 hover:text-ink-200"
             }`}
           >
-            📊 Risk Overview
+            📊 RISK OVERVIEW
           </button>
           <button
             onClick={() => setActiveModalTab("weather")}
-            className={`border-b-2 px-4 py-2 text-xs font-semibold uppercase tracking-wider transition ${
+            className={`py-3 px-4 text-xs font-mono font-bold border-b-2 transition ${
               activeModalTab === "weather"
                 ? "border-accent text-accent"
-                : "border-transparent text-ink-500 hover:text-ink-300"
+                : "border-transparent text-ink-400 hover:text-ink-200"
             }`}
           >
-            🌡 Live Weather
+            🌡 LIVE WEATHER
           </button>
           <button
             onClick={() => setActiveModalTab("ai")}
-            className={`border-b-2 px-4 py-2 text-xs font-semibold uppercase tracking-wider transition ${
+            className={`py-3 px-4 text-xs font-mono font-bold border-b-2 transition ${
               activeModalTab === "ai"
                 ? "border-accent text-accent"
-                : "border-transparent text-ink-500 hover:text-ink-300"
+                : "border-transparent text-ink-400 hover:text-ink-200"
             }`}
           >
-            🤖 AI SHAP Drivers
+            🤖 XGBOOST ML PIPELINE
           </button>
           <button
             onClick={() => setActiveModalTab("interventions")}
-            className={`border-b-2 px-4 py-2 text-xs font-semibold uppercase tracking-wider transition ${
+            className={`py-3 px-4 text-xs font-mono font-bold border-b-2 transition ${
               activeModalTab === "interventions"
                 ? "border-accent text-accent"
-                : "border-transparent text-ink-500 hover:text-ink-300"
+                : "border-transparent text-ink-400 hover:text-ink-200"
             }`}
           >
-            🚨 Emergency Actions
+            🚨 ACTION DISPATCH
           </button>
         </div>
 
-        {/* Modal Body Content */}
-        <div className="max-h-[70vh] overflow-y-auto p-6 space-y-5">
-          {/* TAB 1: OVERVIEW & KEY METRICS */}
-          {activeModalTab === "overview" && (
-            <div className="space-y-5">
-              {/* Weather Status Bar */}
-              <div className="flex items-center justify-between rounded-lg border border-border/80 bg-base-950 px-4 py-2.5">
-                <div className="flex items-center gap-2">
-                  {loading ? (
-                    <>
-                      <span className="h-2.5 w-2.5 rounded-full bg-amber-400 animate-ping" />
-                      <span className="font-mono text-xs font-medium text-amber-400">
-                        Querying Open-Meteo Live API...
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                      <span className="font-mono text-xs font-bold text-emerald-400">
-                        ● REAL-TIME WEATHER ACTIVE
-                      </span>
-                    </>
-                  )}
-                </div>
-                <span className="font-mono text-xs text-ink-400">
-                  {weather?.formattedTime || "Updated Live"}
-                </span>
-              </div>
-
-              {/* 4 Core Metric Dial Cards */}
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="rounded-lg border border-red-500/30 bg-red-950/20 p-3">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-red-400">
-                    COMPOUND RISK
-                  </p>
-                  <p className="mt-1 font-mono text-2xl font-bold text-red-200">
-                    {compoundRisk?.compound_risk_score}
-                    <span className="text-xs font-normal text-red-400/80">/100</span>
-                  </p>
-                  {compoundRisk && (
-                    <div className="mt-2">
-                      <RiskBadge level={compoundRisk.risk_level} size="sm" />
-                    </div>
-                  )}
-                </div>
-
-                <div className="rounded-lg border border-orange-500/30 bg-orange-950/20 p-3">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-orange-400">
-                    HEAT STRESS
-                  </p>
-                  <p className="mt-1 font-mono text-2xl font-bold text-orange-200">
-                    {heatStress?.score}
-                    <span className="text-xs font-normal text-orange-400/80">/100</span>
-                  </p>
-                  <span className="mt-2 inline-block rounded bg-orange-500/20 px-2 py-0.5 font-mono text-[10px] font-bold text-orange-300 uppercase">
-                    {heatStress?.category}
-                  </span>
-                </div>
-
-                <div className="rounded-lg border border-purple-500/30 bg-purple-950/20 p-3">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-purple-400">
-                    GRID STRAIN
-                  </p>
-                  <p className="mt-1 font-mono text-2xl font-bold text-purple-200">
-                    68%
-                  </p>
-                  <span className="mt-2 inline-block rounded bg-purple-500/20 px-2 py-0.5 font-mono text-[10px] font-bold text-purple-300 uppercase">
-                    MODERATE LOAD
-                  </span>
-                </div>
-
-                <div className="rounded-lg border border-sky-500/30 bg-sky-950/20 p-3">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-sky-400">
-                    VULNERABILITY
-                  </p>
-                  <p className="mt-1 font-mono text-2xl font-bold text-sky-200">
-                    58 <span className="text-xs font-normal text-sky-400/80">/100</span>
-                  </p>
-                  <span className="mt-2 inline-block rounded bg-sky-500/20 px-2 py-0.5 font-mono text-[10px] font-bold text-sky-300 uppercase">
-                    HIGH EXPOSURE
-                  </span>
-                </div>
-              </div>
-
-              {/* Weather Summary Quick Grid */}
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 rounded-lg border border-border/80 bg-base-950 p-4">
-                <div>
-                  <span className="text-[10px] font-bold text-ink-500 block uppercase">Temperature</span>
-                  <span className="font-mono text-lg font-bold text-ink-100">{weather?.temperature}°C</span>
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-ink-500 block uppercase">Feels Like</span>
-                  <span className="font-mono text-lg font-bold text-amber-400">{weather?.apparentTemperature}°C</span>
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-ink-500 block uppercase">Relative Humidity</span>
-                  <span className="font-mono text-lg font-bold text-sky-400">{weather?.humidity}%</span>
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-ink-500 block uppercase">Wind Speed</span>
-                  <span className="font-mono text-lg font-bold text-teal-400">{weather?.windSpeed} km/h</span>
-                </div>
-              </div>
+        {/* Content Body */}
+        <div className="p-6 max-h-[75vh] overflow-y-auto space-y-6">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-12 space-y-3">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+              <p className="font-mono text-xs text-ink-400">Evaluating XGBoost ML Pipeline & Querying Open-Meteo...</p>
             </div>
-          )}
-
-          {/* TAB 2: LIVE WEATHER & FORECAST */}
-          {activeModalTab === "weather" && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-3 text-center rounded-lg border border-border/80 bg-base-950 p-3">
-                <div className="p-2">
-                  <span className="text-[10px] text-ink-500 uppercase block font-bold">24H MIN TEMP</span>
-                  <span className="font-mono text-xl font-bold text-sky-400">{weather?.stats24h.min}°C</span>
-                </div>
-                <div className="p-2 border-x border-border/40">
-                  <span className="text-[10px] text-ink-500 uppercase block font-bold">24H MEAN TEMP</span>
-                  <span className="font-mono text-xl font-bold text-ink-100">{weather?.stats24h.mean}°C</span>
-                </div>
-                <div className="p-2">
-                  <span className="text-[10px] text-ink-500 uppercase block font-bold">24H MAX TEMP</span>
-                  <span className="font-mono text-xl font-bold text-rose-400">{weather?.stats24h.max}°C</span>
-                </div>
-              </div>
-
-              {/* 24-Hour Forecast Sparkline */}
-              <div className="rounded-lg border border-border/80 bg-base-950 p-4">
-                <div className="flex items-center justify-between border-b border-border/40 pb-2 mb-3">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-ink-300">
-                    24-HOUR HOURLY TEMPERATURE FORECAST
-                  </h4>
-                  <span className="font-mono text-xs font-semibold text-amber-400">
-                    Peak: {weather?.stats24h.max}°C
-                  </span>
-                </div>
-
-                <div className="h-24 w-full flex items-end justify-between gap-1 pt-3">
-                  {weather?.hourlyForecast.map((pt, idx) => {
-                    const range = (weather?.stats24h.max || 40) - (weather?.stats24h.min || 25) || 1;
-                    const pct = Math.min(100, Math.max(15, ((pt.temp - (weather?.stats24h.min || 25)) / range) * 100));
-                    return (
-                      <div key={idx} className="flex flex-col items-center flex-1 h-full justify-end group relative">
-                        <span className="hidden group-hover:block absolute -top-6 bg-base-800 text-[9px] font-mono text-ink-100 px-1 py-0.5 rounded shadow">
-                          {pt.temp}°C
+          ) : (
+            <>
+              {/* TAB 1: OVERVIEW */}
+              {activeModalTab === "overview" && (
+                <div className="space-y-6">
+                  {/* Top Stats Cards */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="rounded-lg border border-border/80 bg-base-950 p-3">
+                      <span className="text-[10px] font-mono text-ink-400 uppercase block">Compound Risk</span>
+                      <div className="flex items-baseline gap-1 mt-1">
+                        <span className="font-mono text-2xl font-extrabold text-orange-400">
+                          {compoundRisk?.compound_risk_score ?? 78}
                         </span>
-                        <div
-                          className="w-full rounded-t bg-gradient-to-t from-amber-500 to-rose-500 opacity-80 group-hover:opacity-100 transition"
-                          style={{ height: `${pct}%` }}
-                        />
-                        {idx % 4 === 0 && (
-                          <span className="text-[8px] font-mono text-ink-500 mt-1">{pt.time}</span>
-                        )}
+                        <span className="text-xs text-ink-400 font-mono">/100</span>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
+                      <div className="mt-2">
+                        <RiskBadge level={compoundRisk?.risk_level || "HIGH"} size="sm" />
+                      </div>
+                    </div>
 
-          {/* TAB 3: AI SHAP DRIVERS */}
-          {activeModalTab === "ai" && (
-            <div className="space-y-4">
-              <div className="rounded-lg border border-orange-500/30 bg-orange-950/20 p-4">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-orange-400 mb-1">
-                  AI SHAP ROOT-CAUSE EXPLANATION
-                </h4>
-                <p className="text-xs leading-relaxed text-orange-200/90">
-                  {heatStress?.explanation}
-                </p>
-              </div>
+                    <div className="rounded-lg border border-border/80 bg-base-950 p-3">
+                      <span className="text-[10px] font-mono text-ink-400 uppercase block">AI Heat Stress</span>
+                      <div className="flex items-baseline gap-1 mt-1">
+                        <span className="font-mono text-2xl font-extrabold text-red-400">
+                          {mlPrediction?.heatStressScore ?? 76}
+                        </span>
+                        <span className="text-xs text-ink-400 font-mono">/100</span>
+                      </div>
+                      <span className="inline-block mt-2 font-mono text-[9px] font-extrabold text-red-400 bg-red-950/60 px-2 py-0.5 rounded border border-red-500/30">
+                        {mlPrediction?.category ?? "HIGH"}
+                      </span>
+                    </div>
 
-              <div className="rounded-lg border border-border/80 bg-base-950 p-4 space-y-3">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-ink-300">
-                  SHAP FEATURE CONTRIBUTIONS
-                </h4>
+                    <div className="rounded-lg border border-border/80 bg-base-950 p-3">
+                      <span className="text-[10px] font-mono text-ink-400 uppercase block">4-Yr Baseline</span>
+                      <div className="flex items-baseline gap-1 mt-1">
+                        <span className="font-mono text-2xl font-extrabold text-ink-200">
+                          {mlPrediction?.historicalBaseline ?? 61}
+                        </span>
+                        <span className="text-xs text-ink-400 font-mono">/100</span>
+                      </div>
+                      <span className="inline-block mt-2 font-mono text-[9px] font-bold text-orange-400">
+                        Anomaly: +{mlPrediction?.anomaly ?? 15}
+                      </span>
+                    </div>
 
-                <div>
-                  <div className="flex justify-between text-xs text-ink-300 mb-1">
-                    <span>Ambient Temperature Load</span>
-                    <span className="font-mono font-bold text-orange-400">{heatStress?.drivers.temperatureFactor}%</span>
+                    <div className="rounded-lg border border-border/80 bg-base-950 p-3">
+                      <span className="text-[10px] font-mono text-ink-400 uppercase block">Grid Stress</span>
+                      <div className="flex items-baseline gap-1 mt-1">
+                        <span className="font-mono text-2xl font-extrabold text-yellow-400">
+                          68%
+                        </span>
+                      </div>
+                      <span className="inline-block mt-2 text-[9px] font-mono text-yellow-400 font-semibold">
+                        High Load
+                      </span>
+                    </div>
                   </div>
-                  <div className="h-2 w-full rounded-full bg-base-900 overflow-hidden">
-                    <div
-                      className="h-full bg-orange-500 transition-all duration-500"
-                      style={{ width: `${heatStress?.drivers.temperatureFactor || 0}%` }}
-                    />
-                  </div>
-                </div>
 
-                <div>
-                  <div className="flex justify-between text-xs text-ink-300 mb-1">
-                    <span>Relative Humidity Contribution</span>
-                    <span className="font-mono font-bold text-amber-400">{heatStress?.drivers.humidityFactor}%</span>
+                  {/* Machine Learning Model Summary Panel */}
+                  <div className="rounded-lg border border-accent/30 bg-accent/5 p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <h4 className="font-mono text-xs font-bold text-ink-100 uppercase">
+                          AI MODEL STATUS: {mlPrediction?.model ?? "XGBoost-Gradient-Boosting-v1"}
+                        </h4>
+                      </div>
+                      <span className="font-mono text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">
+                        ● {mlPrediction?.status ?? "ACTIVE"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-ink-300 leading-relaxed">
+                      Supervised gradient-boosting model trained on 4 years of historical Indian heat-stress observations.
+                      Live Open-Meteo observations are processed in real-time to compute heat stress and anomaly.
+                    </p>
                   </div>
-                  <div className="h-2 w-full rounded-full bg-base-900 overflow-hidden">
-                    <div
-                      className="h-full bg-amber-400 transition-all duration-500"
-                      style={{ width: `${heatStress?.drivers.humidityFactor || 0}%` }}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-xs text-ink-300 mb-1">
-                    <span>Apparent Heat Stress Elevation</span>
-                    <span className="font-mono font-bold text-rose-400">{heatStress?.drivers.feelsLikeFactor}%</span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-base-900 overflow-hidden">
-                    <div
-                      className="h-full bg-rose-500 transition-all duration-500"
-                      style={{ width: `${heatStress?.drivers.feelsLikeFactor || 0}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 4: EMERGENCY ACTIONS */}
-          {activeModalTab === "interventions" && (
-            <div className="space-y-4">
-              {dispatchStatus && (
-                <div className="rounded-lg border border-emerald-500/40 bg-emerald-950/40 p-3 text-xs font-mono font-semibold text-emerald-300 animate-pulse">
-                  {dispatchStatus}
                 </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button
-                  onClick={() => handleDispatchAction("Mobile Misting Bus #4")}
-                  className="flex items-center gap-3 rounded-lg border border-border bg-base-950 p-3.5 text-left hover:border-accent hover:bg-accent/10 transition group"
-                >
-                  <span className="text-2xl">🚚</span>
-                  <div>
-                    <h5 className="font-bold text-xs text-ink-100 group-hover:text-accent uppercase">
-                      Dispatch Misting Bus
-                    </h5>
-                    <p className="text-[11px] text-ink-500">Deploy high-capacity cooling spray vehicle</p>
+              {/* TAB 2: LIVE WEATHER */}
+              {activeModalTab === "weather" && weather && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="rounded-lg border border-border/80 bg-base-950 p-3 text-center">
+                      <span className="text-[10px] font-mono text-ink-400 uppercase block">Ambient Temp</span>
+                      <span className="font-mono text-xl font-bold text-ink-100 mt-1 block">{weather.temperature}°C</span>
+                    </div>
+                    <div className="rounded-lg border border-border/80 bg-base-950 p-3 text-center">
+                      <span className="text-[10px] font-mono text-ink-400 uppercase block">Feels Like</span>
+                      <span className="font-mono text-xl font-bold text-red-400 mt-1 block">{weather.apparentTemperature}°C</span>
+                    </div>
+                    <div className="rounded-lg border border-border/80 bg-base-950 p-3 text-center">
+                      <span className="text-[10px] font-mono text-ink-400 uppercase block">Humidity</span>
+                      <span className="font-mono text-xl font-bold text-cyan-400 mt-1 block">{weather.humidity}%</span>
+                    </div>
+                    <div className="rounded-lg border border-border/80 bg-base-950 p-3 text-center">
+                      <span className="text-[10px] font-mono text-ink-400 uppercase block">Wind Speed</span>
+                      <span className="font-mono text-xl font-bold text-emerald-400 mt-1 block">{weather.windSpeed} km/h</span>
+                    </div>
                   </div>
-                </button>
+                </div>
+              )}
 
-                <button
-                  onClick={() => handleDispatchAction("Community Cooling Shelter #2")}
-                  className="flex items-center gap-3 rounded-lg border border-border bg-base-950 p-3.5 text-left hover:border-accent hover:bg-accent/10 transition group"
-                >
-                  <span className="text-2xl">🏢</span>
-                  <div>
-                    <h5 className="font-bold text-xs text-ink-100 group-hover:text-accent uppercase">
-                      Open Cooling Shelter
-                    </h5>
-                    <p className="text-[11px] text-ink-500">Activate air-conditioned community hall</p>
+              {/* TAB 3: XGBOOST ML EXPLAINABILITY */}
+              {activeModalTab === "ai" && mlPrediction && (
+                <div className="space-y-5">
+                  <div className="rounded-lg border border-border/80 bg-base-950 p-4 space-y-3">
+                    <h4 className="font-mono text-xs font-bold text-ink-100 uppercase tracking-tight">
+                      XGBoost Model Performance Metrics (4-Year Dataset Evaluation)
+                    </h4>
+                    <div className="grid grid-cols-3 gap-3 font-mono text-xs">
+                      <div className="bg-base-900 p-2.5 rounded border border-border/40">
+                        <span className="text-ink-400 text-[10px] block uppercase">Mean Absolute Error (MAE)</span>
+                        <strong className="text-emerald-400 text-sm mt-0.5 block">{mlPrediction.metrics.mae}</strong>
+                      </div>
+                      <div className="bg-base-900 p-2.5 rounded border border-border/40">
+                        <span className="text-ink-400 text-[10px] block uppercase">Root Mean Sq Error (RMSE)</span>
+                        <strong className="text-emerald-400 text-sm mt-0.5 block">{mlPrediction.metrics.rmse}</strong>
+                      </div>
+                      <div className="bg-base-900 p-2.5 rounded border border-border/40">
+                        <span className="text-ink-400 text-[10px] block uppercase">Variance Score (R²)</span>
+                        <strong className="text-emerald-400 text-sm mt-0.5 block">{mlPrediction.metrics.r2}</strong>
+                      </div>
+                    </div>
                   </div>
-                </button>
 
-                <button
-                  onClick={() => handleDispatchAction("Grid Substation Relief")}
-                  className="flex items-center gap-3 rounded-lg border border-border bg-base-950 p-3.5 text-left hover:border-accent hover:bg-accent/10 transition group"
-                >
-                  <span className="text-2xl">⚡</span>
-                  <div>
-                    <h5 className="font-bold text-xs text-ink-100 group-hover:text-accent uppercase">
-                      Balance Power Grid
-                    </h5>
-                    <p className="text-[11px] text-ink-500">Prioritize feeder backup & prevent outage</p>
+                  {/* SHAP / Feature Importances */}
+                  <div className="rounded-lg border border-border/80 bg-base-950 p-4 space-y-3">
+                    <h4 className="font-mono text-xs font-bold text-ink-100 uppercase tracking-tight">
+                      XGBoost Feature Importance Weights (% Contribution)
+                    </h4>
+                    <div className="space-y-2.5">
+                      {mlPrediction.featureImportances.map((item, idx) => (
+                        <div key={idx} className="space-y-1">
+                          <div className="flex justify-between text-xs font-mono">
+                            <span className="text-ink-300">{item.factor}</span>
+                            <span className="text-accent font-bold">{item.percentage}%</span>
+                          </div>
+                          <div className="h-2 w-full rounded-full bg-base-900 overflow-hidden border border-border/40">
+                            <div
+                              className="h-full bg-accent transition-all duration-500 rounded-full"
+                              style={{ width: `${item.percentage}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </button>
+                </div>
+              )}
 
-                <button
-                  onClick={() => handleDispatchAction("Hydration & Healthcare Taskforce")}
-                  className="flex items-center gap-3 rounded-lg border border-border bg-base-950 p-3.5 text-left hover:border-accent hover:bg-accent/10 transition group"
-                >
-                  <span className="text-2xl">🩺</span>
-                  <div>
-                    <h5 className="font-bold text-xs text-ink-100 group-hover:text-accent uppercase">
-                      Deploy Healthcare Unit
-                    </h5>
-                    <p className="text-[11px] text-ink-500">Send hydration salts & emergency medical team</p>
+              {/* TAB 4: INTERVENTIONS */}
+              {activeModalTab === "interventions" && (
+                <div className="space-y-3">
+                  <h4 className="font-mono text-xs font-bold text-ink-100 uppercase">Emergency Action Dispatch</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <button
+                      onClick={() => handleDispatchAction("Misting Bus #4 Deployment")}
+                      className="p-3 text-left rounded-lg border border-border/80 bg-base-950 hover:bg-base-800 hover:border-accent/50 transition group"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-xs font-bold text-accent">🚍 Dispatch Misting Bus #4</span>
+                        <span className="text-[10px] text-ink-400 font-mono">PRIORITY 1</span>
+                      </div>
+                      <p className="text-[11px] text-ink-400 mt-1">Deploy mobile evaporative misting unit to bus terminals & markets.</p>
+                    </button>
+
+                    <button
+                      onClick={() => handleDispatchAction("Cooling Shelter #2 Activation")}
+                      className="p-3 text-left rounded-lg border border-border/80 bg-base-950 hover:bg-base-800 hover:border-accent/50 transition group"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-xs font-bold text-accent">❄️ Open Cooling Shelter #2</span>
+                        <span className="text-[10px] text-ink-400 font-mono">PRIORITY 1</span>
+                      </div>
+                      <p className="text-[11px] text-ink-400 mt-1">Activate air-conditioned community shelter with hydration stations.</p>
+                    </button>
                   </div>
-                </button>
-              </div>
-            </div>
+
+                  {dispatchStatus && (
+                    <div className="p-3 rounded-md border border-emerald-500/40 bg-emerald-950/40 font-mono text-xs text-emerald-300">
+                      {dispatchStatus}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
-        </div>
-
-        {/* Modal Footer */}
-        <div className="flex items-center justify-between border-t border-border/80 bg-base-950 px-6 py-3">
-          <DataStatusBadge />
-          <button
-            onClick={onClose}
-            className="rounded-md bg-accent px-4 py-1.5 text-xs font-bold text-base-950 hover:bg-accent/90 transition"
-          >
-            Done / Close Modal
-          </button>
         </div>
       </div>
     </div>

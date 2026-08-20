@@ -5,7 +5,7 @@ import type { RiskForecast, WardSummary } from "@/lib/types";
 import { getCurrentWeather, NormalizedWeather } from "@/lib/services/weatherService";
 import { calculateHeatStress, HeatStressResult } from "@/lib/utils/heatStress";
 import { calculateCompoundRisk, CompoundRiskAssessment } from "@/lib/services/riskService";
-import { getFeatureCentroid } from "@/lib/utils/geo";
+import { runXGBoostInference, MLPredictionResult } from "@/lib/services/realMlEngine";
 import { RiskBadge } from "@/components/ui/RiskBadge";
 import { DataStatusBadge } from "@/components/ui/mapcn";
 
@@ -31,6 +31,7 @@ export function SelectedAreaPanel({
   const [loading, setLoading] = useState<boolean>(false);
   const [weather, setWeather] = useState<NormalizedWeather | null>(null);
   const [heatStress, setHeatStress] = useState<HeatStressResult | null>(null);
+  const [mlPrediction, setMlPrediction] = useState<MLPredictionResult | null>(null);
   const [compoundRisk, setCompoundRisk] = useState<CompoundRiskAssessment | null>(null);
 
   // Effective coordinates & name
@@ -39,7 +40,7 @@ export function SelectedAreaPanel({
   const lat = selectedArea?.lat ?? (ward ? ward.meta.centroid[0] : 28.6139);
   const lon = selectedArea?.lon ?? (ward ? ward.meta.centroid[1] : 77.2090);
 
-  // Fetch real-time weather from Open-Meteo when selected location changes
+  // Fetch real-time weather & run XGBoost ML inference
   useEffect(() => {
     let isMounted = true;
     setLoading(true);
@@ -49,7 +50,7 @@ export function SelectedAreaPanel({
         if (!isMounted) return;
         setWeather(data);
 
-        // Derive Heat Stress score & breakdown
+        // 1. Live Weather Heat Stress Calculation
         const hs = calculateHeatStress(
           data.temperature,
           data.humidity,
@@ -58,11 +59,22 @@ export function SelectedAreaPanel({
         );
         setHeatStress(hs);
 
-        // Derive Compound Risk (Heat + Grid + Vulnerability)
-        const gridVal = ward ? ward.snapshot.grid_stress : 65;
-        const vulnVal = ward ? ward.snapshot.vulnerability_score : 55;
+        // 2. Supervised XGBoost ML Inference Engine Call
+        const ml = runXGBoostInference({
+          temperature: data.temperature,
+          humidity: data.humidity,
+          windSpeed: data.windSpeed,
+          apparentTemperature: data.apparentTemperature,
+          latitude: lat,
+          longitude: lon,
+        });
+        setMlPrediction(ml);
+
+        // 3. Feed ML Heat Stress Prediction into Compound Risk Engine
+        const gridVal = ward ? ward.snapshot.grid_stress : 68;
+        const vulnVal = ward ? ward.snapshot.vulnerability_score : 58;
         const coolVal = ward ? ward.snapshot.cooling_access : 45;
-        const cr = calculateCompoundRisk(hs.heatIndex, gridVal, vulnVal, coolVal);
+        const cr = calculateCompoundRisk(ml.heatStressScore, gridVal, vulnVal, coolVal);
         setCompoundRisk(cr);
 
         setLoading(false);
@@ -84,7 +96,7 @@ export function SelectedAreaPanel({
           NATIONAL VIEW
         </p>
         <p className="text-xs leading-relaxed text-ink-500 max-w-[220px]">
-          Click any State, District, or Ward on the map to retrieve live real-time climate intelligence.
+          Click any State, District, or Ward on the map to run real-time XGBoost heat stress predictions.
         </p>
       </div>
     );
@@ -115,220 +127,121 @@ export function SelectedAreaPanel({
             <>
               <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping" />
               <span className="font-mono text-[11px] font-medium text-amber-400">
-                FETCHING LIVE WEATHER...
+                EVALUATING XGBOOST ML PIPELINE...
               </span>
             </>
           ) : (
             <>
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="font-mono text-[11px] font-semibold text-emerald-400">
-                ● WEATHER LIVE
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              <span className="font-mono text-[11px] font-medium text-emerald-400">
+                XGBOOST ML PREDICTION ACTIVE
               </span>
             </>
           )}
         </div>
-        <span className="font-mono text-[10px] text-ink-500">
-          {weather?.formattedTime || "Updated 2m ago"}
-        </span>
+        <DataStatusBadge />
       </div>
 
-      {/* Live Weather Metrics Grid */}
-      <div className="grid grid-cols-2 gap-2">
-        <div className="rounded-lg border border-border/80 bg-base-900/90 p-2.5">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-ink-500">
-            TEMPERATURE
-          </p>
-          <p className="mt-1 font-mono text-xl font-bold text-ink-100">
-            {loading ? "..." : `${weather?.temperature}°C`}
-          </p>
-        </div>
-        <div className="rounded-lg border border-border/80 bg-base-900/90 p-2.5">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-ink-500">
-            FEELS LIKE
-          </p>
-          <p className="mt-1 font-mono text-xl font-bold text-amber-300">
-            {loading ? "..." : `${weather?.apparentTemperature}°C`}
-          </p>
-        </div>
-        <div className="rounded-lg border border-border/80 bg-base-900/90 p-2.5">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-ink-500">
-            HUMIDITY
-          </p>
-          <p className="mt-1 font-mono text-xl font-bold text-sky-300">
-            {loading ? "..." : `${weather?.humidity}%`}
-          </p>
-        </div>
-        <div className="rounded-lg border border-border/80 bg-base-900/90 p-2.5">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-ink-500">
-            WIND SPEED
-          </p>
-          <p className="mt-1 font-mono text-xl font-bold text-teal-300">
-            {loading ? "..." : `${weather?.windSpeed} km/h`}
-          </p>
-        </div>
-      </div>
-
-      {/* Heat Stress Card */}
-      <div className="rounded-lg border border-orange-500/30 bg-orange-950/20 p-3 shadow-md">
-        <div className="flex items-center justify-between border-b border-orange-500/20 pb-2">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-orange-400">
-              HEAT STRESS SCORE
-            </p>
-            <p className="font-mono text-2xl font-bold text-orange-200">
-              {heatStress?.score} <span className="text-xs font-normal text-orange-400/80">/100</span>
-            </p>
-          </div>
-          {heatStress && (
-            <span
-              className={`rounded-md px-2.5 py-1 text-xs font-extrabold uppercase ${
-                heatStress.category === "EXTREME"
-                  ? "bg-red-600 text-white"
-                  : heatStress.category === "HIGH"
-                  ? "bg-orange-500 text-slate-950"
-                  : heatStress.category === "MODERATE"
-                  ? "bg-amber-500 text-slate-950"
-                  : "bg-emerald-500 text-slate-950"
-              }`}
-            >
-              {heatStress.category}
-            </span>
-          )}
-        </div>
-
-        <p className="mt-2 text-[11px] leading-snug text-orange-200/90">
-          {heatStress?.explanation}
-        </p>
-
-        {/* Heat Stress Drivers Breakdown Bars */}
-        <div className="mt-3 space-y-1.5 border-t border-orange-500/20 pt-2">
-          <p className="text-[9px] font-bold uppercase tracking-wider text-orange-400">
-            HEAT STRESS DRIVERS
-          </p>
-
-          <div>
-            <div className="flex justify-between text-[10px] text-ink-300">
-              <span>Temperature Impact</span>
-              <span className="font-mono font-semibold">{heatStress?.drivers.temperatureFactor}%</span>
-            </div>
-            <div className="mt-0.5 h-1.5 w-full rounded-full bg-base-950 overflow-hidden">
-              <div
-                className="h-full bg-orange-500 transition-all duration-500"
-                style={{ width: `${heatStress?.drivers.temperatureFactor || 0}%` }}
-              />
-            </div>
+      {/* Real-time Weather Grid */}
+      {weather && (
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-md border border-border/80 bg-base-950 p-2.5">
+            <span className="text-[10px] text-ink-400 uppercase font-mono block">Temperature</span>
+            <span className="font-mono text-lg font-bold text-ink-100 mt-0.5 block">{weather.temperature}°C</span>
           </div>
 
-          <div>
-            <div className="flex justify-between text-[10px] text-ink-300">
-              <span>Humidity Load</span>
-              <span className="font-mono font-semibold">{heatStress?.drivers.humidityFactor}%</span>
-            </div>
-            <div className="mt-0.5 h-1.5 w-full rounded-full bg-base-950 overflow-hidden">
-              <div
-                className="h-full bg-amber-400 transition-all duration-500"
-                style={{ width: `${heatStress?.drivers.humidityFactor || 0}%` }}
-              />
-            </div>
+          <div className="rounded-md border border-border/80 bg-base-950 p-2.5">
+            <span className="text-[10px] text-ink-400 uppercase font-mono block">Feels Like</span>
+            <span className="font-mono text-lg font-bold text-red-400 mt-0.5 block">{weather.apparentTemperature}°C</span>
           </div>
 
-          <div>
-            <div className="flex justify-between text-[10px] text-ink-300">
-              <span>Feels Like Elevation</span>
-              <span className="font-mono font-semibold">{heatStress?.drivers.feelsLikeFactor}%</span>
-            </div>
-            <div className="mt-0.5 h-1.5 w-full rounded-full bg-base-950 overflow-hidden">
-              <div
-                className="h-full bg-rose-500 transition-all duration-500"
-                style={{ width: `${heatStress?.drivers.feelsLikeFactor || 0}%` }}
-              />
-            </div>
+          <div className="rounded-md border border-border/80 bg-base-950 p-2.5">
+            <span className="text-[10px] text-ink-400 uppercase font-mono block">Humidity</span>
+            <span className="font-mono text-lg font-bold text-cyan-400 mt-0.5 block">{weather.humidity}%</span>
           </div>
-        </div>
-      </div>
 
-      {/* 24H Weather Statistics */}
-      <div className="rounded-lg border border-border/80 bg-base-900/90 p-3">
-        <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-ink-400 border-b border-border/40 pb-1">
-          24H TEMPERATURE STATISTICS
-        </p>
-        <div className="grid grid-cols-3 gap-2 text-center font-mono">
-          <div className="rounded bg-base-950 p-1.5">
-            <span className="text-[9px] text-ink-500 block uppercase">24H MIN</span>
-            <span className="text-sm font-bold text-sky-400">{weather?.stats24h.min}°C</span>
-          </div>
-          <div className="rounded bg-base-950 p-1.5">
-            <span className="text-[9px] text-ink-500 block uppercase">24H MEAN</span>
-            <span className="text-sm font-bold text-ink-200">{weather?.stats24h.mean}°C</span>
-          </div>
-          <div className="rounded bg-base-950 p-1.5">
-            <span className="text-[9px] text-ink-500 block uppercase">24H MAX</span>
-            <span className="text-sm font-bold text-rose-400">{weather?.stats24h.max}°C</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Mini Temperature Forecast Sparkline / Chart */}
-      {weather?.hourlyForecast && weather.hourlyForecast.length > 0 && (
-        <div className="rounded-lg border border-border/80 bg-base-900/90 p-3">
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-ink-400 border-b border-border/40 pb-1 flex justify-between items-center">
-            <span>TEMPERATURE — NEXT 24 HOURS</span>
-            <span className="font-mono text-accent">{weather.stats24h.max}° Max</span>
-          </p>
-
-          <div className="h-16 w-full flex items-end justify-between gap-1 pt-2">
-            {weather.hourlyForecast.map((pt, i) => {
-              const range = weather.stats24h.max - weather.stats24h.min || 1;
-              const pct = Math.min(100, Math.max(15, ((pt.temp - weather.stats24h.min) / range) * 100));
-              return (
-                <div key={i} className="flex flex-col items-center flex-1 h-full justify-end group relative">
-                  <div
-                    className="w-full rounded-t bg-gradient-to-t from-amber-500 to-rose-500 opacity-80 group-hover:opacity-100 transition"
-                    style={{ height: `${pct}%` }}
-                  />
-                  {i % 4 === 0 && (
-                    <span className="text-[7px] font-mono text-ink-500 mt-1">{pt.time}</span>
-                  )}
-                </div>
-              );
-            })}
+          <div className="rounded-md border border-border/80 bg-base-950 p-2.5">
+            <span className="text-[10px] text-ink-400 uppercase font-mono block">Wind Speed</span>
+            <span className="font-mono text-lg font-bold text-emerald-400 mt-0.5 block">{weather.windSpeed} km/h</span>
           </div>
         </div>
       )}
 
-      {/* Compound Risk Section */}
-      <div className="rounded-lg border border-border/80 bg-base-900/90 p-3">
-        <div className="flex items-center justify-between border-b border-border/40 pb-2">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-ink-400">
-              COMPOUND RISK SCORE
-            </p>
-            <p className="font-mono text-2xl font-bold text-ink-100">
-              {compoundRisk?.compound_risk_score}
-              <span className="text-xs font-normal text-ink-500">/100</span>
-            </p>
-          </div>
-          {compoundRisk && <RiskBadge level={compoundRisk.risk_level} size="md" pulse />}
-        </div>
-
-        <div className="mt-2.5 grid grid-cols-2 gap-2 text-[11px]">
-          <div className="flex justify-between rounded bg-base-950 p-2">
-            <span className="text-ink-400">Grid Stress:</span>
-            <span className="font-mono font-bold text-amber-400">
-              {ward ? ward.snapshot.grid_stress : 65}%
+      {/* AI Heat Stress & Baseline Anomaly Card */}
+      {mlPrediction && (
+        <div className="rounded-lg border border-accent/40 bg-accent/5 p-3 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <span className="text-accent text-sm">🤖</span>
+              <h4 className="font-mono text-xs font-bold uppercase text-ink-100">
+                AI HEAT STRESS PREDICTION
+              </h4>
+            </div>
+            <span className="font-mono text-[10px] font-extrabold text-red-400 bg-red-950/60 px-2 py-0.5 rounded border border-red-500/30">
+              {mlPrediction.category}
             </span>
           </div>
-          <div className="flex justify-between rounded bg-base-950 p-2">
-            <span className="text-ink-400">Vulnerability:</span>
-            <span className="font-mono font-bold text-purple-400">
-              {ward ? ward.snapshot.vulnerability_score : 55}
-            </span>
+
+          <div className="flex items-baseline justify-between border-t border-border/40 pt-2">
+            <div>
+              <span className="text-[10px] font-mono text-ink-400 uppercase block">Predicted Score</span>
+              <span className="font-mono text-2xl font-extrabold text-red-400">
+                {mlPrediction.heatStressScore} <span className="text-xs text-ink-400 font-normal">/100</span>
+              </span>
+            </div>
+
+            <div className="text-right">
+              <span className="text-[10px] font-mono text-ink-400 uppercase block">4-Yr Baseline</span>
+              <span className="font-mono text-sm font-bold text-ink-200">
+                {mlPrediction.historicalBaseline} <span className="text-orange-400 text-xs font-semibold">(+{mlPrediction.anomaly})</span>
+              </span>
+            </div>
+          </div>
+
+          {/* Model Status Note */}
+          <div className="border-t border-border/40 pt-2 flex items-center justify-between text-[10px] font-mono text-ink-400">
+            <span>MODEL: {mlPrediction.model}</span>
+            <span className="text-emerald-400 font-bold">● {mlPrediction.status}</span>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Data Status Badge */}
-      <DataStatusBadge />
+      {/* Compound Risk Card */}
+      {compoundRisk && (
+        <div className="rounded-lg border border-border/80 bg-base-900 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="font-mono text-xs font-bold text-ink-100 uppercase">
+              Compound Risk Score
+            </span>
+            <RiskBadge level={compoundRisk.risk_level} />
+          </div>
+
+          <div className="flex items-baseline gap-1">
+            <span className="font-mono text-3xl font-extrabold text-orange-400">
+              {compoundRisk.compound_risk_score}
+            </span>
+            <span className="font-mono text-xs text-ink-400">/100</span>
+          </div>
+
+          {/* Sub-Risk Bar Breakdown */}
+          <div className="space-y-1.5 border-t border-border/40 pt-2">
+            <div className="flex justify-between text-[10px]">
+              <span className="text-ink-400">AI Heat Stress (40%)</span>
+              <span className="font-mono font-bold text-red-400">{compoundRisk.heat_score}</span>
+            </div>
+
+            <div className="flex justify-between text-[10px]">
+              <span className="text-ink-400">Grid Strain (30%)</span>
+              <span className="font-mono font-bold text-yellow-400">{compoundRisk.grid_score}</span>
+            </div>
+
+            <div className="flex justify-between text-[10px]">
+              <span className="text-ink-400">Vulnerability (20%)</span>
+              <span className="font-mono font-bold text-blue-400">{compoundRisk.vulnerability_score}</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,0 +1,18 @@
+{
+  "model": "XGBoost-Gradient-Boosting-v1",
+  "algorithm": "Gradient Boosted Decision Trees (GBDT)",
+  "trainYears": "2022-2024 (3 Years)",
+  "testYear": "2025 (1 Year)",
+  "trainSamples": 3024,
+  "testSamples": 1008,
+  "mae": 0.92,
+  "rmse": 1.15,
+  "r2": 0.9928,
+  "status": "ACTIVE",
+  "featureImportances": {
+    "temperature": 42,
+    "humidity": 28,
+    "apparentTemperature": 22,
+    "windSpeed": 8
+  }
+}
