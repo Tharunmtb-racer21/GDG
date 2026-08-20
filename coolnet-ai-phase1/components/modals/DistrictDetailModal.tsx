@@ -3,7 +3,10 @@
 import React, { useEffect, useState } from "react";
 import { getCurrentWeather, NormalizedWeather } from "@/lib/services/weatherService";
 import { calculateHeatStress, HeatStressResult } from "@/lib/utils/heatStress";
-import { calculateCompoundRisk, CompoundRiskAssessment } from "@/lib/services/riskService";
+import {
+  calculateCompoundClimateRisk,
+  CompoundRiskResult,
+} from "@/lib/services/riskService";
 import { runXGBoostInference, MLPredictionResult } from "@/lib/services/realMlEngine";
 import { SelectedAreaMeta } from "@/components/panels/SelectedAreaPanel";
 import { RiskBadge } from "@/components/ui/RiskBadge";
@@ -26,7 +29,7 @@ export function DistrictDetailModal({
   const [weather, setWeather] = useState<NormalizedWeather | null>(null);
   const [heatStress, setHeatStress] = useState<HeatStressResult | null>(null);
   const [mlPrediction, setMlPrediction] = useState<MLPredictionResult | null>(null);
-  const [compoundRisk, setCompoundRisk] = useState<CompoundRiskAssessment | null>(null);
+  const [compoundRisk, setCompoundRisk] = useState<CompoundRiskResult | null>(null);
   const [dispatchStatus, setDispatchStatus] = useState<string | null>(null);
   const [activeModalTab, setActiveModalTab] = useState<"overview" | "weather" | "ai" | "interventions">("overview");
 
@@ -36,7 +39,7 @@ export function DistrictDetailModal({
   const lat = areaMeta?.lat ?? 11.0168;
   const lon = areaMeta?.lon ?? 76.9558;
 
-  // Fetch real-time weather & run XGBoost ML inference
+  // Fetch real-time weather & run XGBoost ML & Compound Climate Risk inference
   useEffect(() => {
     if (!isOpen || !areaMeta) return;
 
@@ -69,8 +72,14 @@ export function DistrictDetailModal({
         });
         setMlPrediction(ml);
 
-        // 3. Feed ML Heat Stress Prediction into Compound Risk Engine
-        const cr = calculateCompoundRisk(ml.heatStressScore, 68, 58, 45);
+        // 3. Feed ML Heat Stress Prediction into CoolNet Compound Climate Risk Engine
+        const cr = calculateCompoundClimateRisk({
+          heatStress: ml.heatStressScore,
+          historicalAnomaly: ml.anomaly,
+          gridStress: 68,
+          vulnerability: 58,
+          coolingAccess: 45,
+        });
         setCompoundRisk(cr);
 
         setLoading(false);
@@ -143,7 +152,7 @@ export function DistrictDetailModal({
                 : "border-transparent text-ink-400 hover:text-ink-200"
             }`}
           >
-            📊 RISK OVERVIEW
+            📊 COMPOUND RISK OVERVIEW
           </button>
           <button
             onClick={() => setActiveModalTab("weather")}
@@ -173,7 +182,7 @@ export function DistrictDetailModal({
                 : "border-transparent text-ink-400 hover:text-ink-200"
             }`}
           >
-            🚨 ACTION DISPATCH
+            🚨 ACTION DISPATCH ({compoundRisk?.recommendations.length ?? 0})
           </button>
         </div>
 
@@ -182,25 +191,42 @@ export function DistrictDetailModal({
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12 space-y-3">
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-              <p className="font-mono text-xs text-ink-400">Evaluating XGBoost ML Pipeline & Querying Open-Meteo...</p>
+              <p className="font-mono text-xs text-ink-400">Evaluating CoolNet Compound Risk Engine & XGBoost Pipeline...</p>
             </div>
           ) : (
             <>
-              {/* TAB 1: OVERVIEW */}
+              {/* TAB 1: COMPOUND RISK OVERVIEW */}
               {activeModalTab === "overview" && (
                 <div className="space-y-6">
+                  {/* Alert Banner for High / Critical Risk */}
+                  {compoundRisk && (compoundRisk.category === "HIGH" || compoundRisk.category === "CRITICAL") && (
+                    <div className="rounded-lg border border-red-500/50 bg-red-950/60 p-3.5 flex items-center justify-between animate-pulse">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xl">🚨</span>
+                        <div>
+                          <h4 className="font-mono text-xs font-bold uppercase text-red-300">
+                            {compoundRisk.category} CLIMATE RISK ALERT — {name}
+                          </h4>
+                          <p className="text-[11px] text-red-200 mt-0.5">
+                            Heat stress and electrical grid strain are simultaneously elevated. Immediate mitigation recommended.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Top Stats Cards */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div className="rounded-lg border border-border/80 bg-base-950 p-3">
                       <span className="text-[10px] font-mono text-ink-400 uppercase block">Compound Risk</span>
                       <div className="flex items-baseline gap-1 mt-1">
                         <span className="font-mono text-2xl font-extrabold text-orange-400">
-                          {compoundRisk?.compound_risk_score ?? 78}
+                          {compoundRisk?.score ?? 78}
                         </span>
                         <span className="text-xs text-ink-400 font-mono">/100</span>
                       </div>
                       <div className="mt-2">
-                        <RiskBadge level={compoundRisk?.risk_level || "HIGH"} size="sm" />
+                        <RiskBadge level={compoundRisk?.category || "HIGH"} size="sm" />
                       </div>
                     </div>
 
@@ -218,48 +244,86 @@ export function DistrictDetailModal({
                     </div>
 
                     <div className="rounded-lg border border-border/80 bg-base-950 p-3">
-                      <span className="text-[10px] font-mono text-ink-400 uppercase block">4-Yr Baseline</span>
-                      <div className="flex items-baseline gap-1 mt-1">
-                        <span className="font-mono text-2xl font-extrabold text-ink-200">
-                          {mlPrediction?.historicalBaseline ?? 61}
-                        </span>
-                        <span className="text-xs text-ink-400 font-mono">/100</span>
-                      </div>
-                      <span className="inline-block mt-2 font-mono text-[9px] font-bold text-orange-400">
-                        Anomaly: +{mlPrediction?.anomaly ?? 15}
-                      </span>
-                    </div>
-
-                    <div className="rounded-lg border border-border/80 bg-base-950 p-3">
-                      <span className="text-[10px] font-mono text-ink-400 uppercase block">Grid Stress</span>
+                      <span className="text-[10px] font-mono text-ink-400 uppercase block">Grid Strain</span>
                       <div className="flex items-baseline gap-1 mt-1">
                         <span className="font-mono text-2xl font-extrabold text-yellow-400">
                           68%
                         </span>
                       </div>
                       <span className="inline-block mt-2 text-[9px] font-mono text-yellow-400 font-semibold">
-                        High Load
+                        ● DEMO FEED
+                      </span>
+                    </div>
+
+                    <div className="rounded-lg border border-border/80 bg-base-950 p-3">
+                      <span className="text-[10px] font-mono text-ink-400 uppercase block">Cooling Access</span>
+                      <div className="flex items-baseline gap-1 mt-1">
+                        <span className="font-mono text-2xl font-extrabold text-blue-400">
+                          45%
+                        </span>
+                      </div>
+                      <span className="inline-block mt-2 text-[9px] font-mono text-blue-400 font-semibold">
+                        55% Deficit
                       </span>
                     </div>
                   </div>
 
-                  {/* Machine Learning Model Summary Panel */}
-                  <div className="rounded-lg border border-accent/30 bg-accent/5 p-4 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                        <h4 className="font-mono text-xs font-bold text-ink-100 uppercase">
-                          AI MODEL STATUS: {mlPrediction?.model ?? "XGBoost-Gradient-Boosting-v1"}
+                  {/* Primary & Secondary Drivers */}
+                  {compoundRisk && (
+                    <div className="rounded-lg border border-border/80 bg-base-950 p-4 space-y-3">
+                      <div className="flex items-center justify-between border-b border-border/40 pb-2">
+                        <h4 className="font-mono text-xs font-bold uppercase text-ink-100">
+                          COMPOUND RISK DRIVERS ANALYSIS
                         </h4>
+                        <div className="flex gap-2">
+                          <span className="text-[10px] font-mono font-bold text-accent bg-accent/10 px-2 py-0.5 rounded">
+                            PRIMARY: {compoundRisk.primaryDriver}
+                          </span>
+                          <span className="text-[10px] font-mono text-ink-400 bg-base-800 px-2 py-0.5 rounded">
+                            SECONDARY: {compoundRisk.secondaryDriver}
+                          </span>
+                        </div>
                       </div>
-                      <span className="font-mono text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">
-                        ● {mlPrediction?.status ?? "ACTIVE"}
-                      </span>
+
+                      {/* Drivers Progress Bars */}
+                      <div className="space-y-2 text-xs font-mono">
+                        {compoundRisk.drivers.map((d, idx) => (
+                          <div key={idx} className="space-y-1">
+                            <div className="flex justify-between">
+                              <span className="text-ink-300">{d.factor}</span>
+                              <span className="text-accent font-bold">{d.score} / 100</span>
+                            </div>
+                            <div className="h-2 w-full rounded-full bg-base-900 overflow-hidden border border-border/40">
+                              <div
+                                className="h-full bg-accent transition-all rounded-full"
+                                style={{ width: `${d.score}%` }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <p className="text-xs text-ink-300 leading-relaxed">
-                      Supervised gradient-boosting model trained on 4 years of historical Indian heat-stress observations.
-                      Live Open-Meteo observations are processed in real-time to compute heat stress and anomaly.
-                    </p>
+                  )}
+
+                  {/* Deterministic Explainable AI Block */}
+                  {compoundRisk && (
+                    <div className="rounded-lg border border-accent/30 bg-accent/5 p-4 space-y-2">
+                      <h4 className="font-mono text-xs font-bold text-ink-100 uppercase">
+                        EXPLAINABLE AI CLIMATE DIAGNOSTIC
+                      </h4>
+                      <p className="text-xs text-ink-300 leading-relaxed font-sans">
+                        {compoundRisk.explanation}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Data Source Honesty Status Bar */}
+                  <div className="rounded-md border border-border/60 bg-base-950 p-2.5 text-[9px] font-mono flex flex-wrap justify-between items-center text-ink-400">
+                    <span>Weather: <strong className="text-emerald-400">● LIVE</strong></span>
+                    <span>Historical: <strong className="text-blue-400">● 4-YR BASELINE</strong></span>
+                    <span>ML Engine: <strong className="text-emerald-400">● ACTIVE</strong></span>
+                    <span>Grid Stress: <strong className="text-amber-400">● DEMO</strong></span>
+                    <span>Vulnerability: <strong className="text-amber-400">● DEMO</strong></span>
                   </div>
                 </div>
               )}
@@ -311,7 +375,6 @@ export function DistrictDetailModal({
                     </div>
                   </div>
 
-                  {/* SHAP / Feature Importances */}
                   <div className="rounded-lg border border-border/80 bg-base-950 p-4 space-y-3">
                     <h4 className="font-mono text-xs font-bold text-ink-100 uppercase tracking-tight">
                       XGBoost Feature Importance Weights (% Contribution)
@@ -336,32 +399,33 @@ export function DistrictDetailModal({
                 </div>
               )}
 
-              {/* TAB 4: INTERVENTIONS */}
-              {activeModalTab === "interventions" && (
+              {/* TAB 4: RECOMMENDED ACTION DISPATCH */}
+              {activeModalTab === "interventions" && compoundRisk && (
                 <div className="space-y-3">
-                  <h4 className="font-mono text-xs font-bold text-ink-100 uppercase">Emergency Action Dispatch</h4>
+                  <h4 className="font-mono text-xs font-bold text-ink-100 uppercase">
+                    Targeted Action Recommendations (Derived from Risk Drivers)
+                  </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <button
-                      onClick={() => handleDispatchAction("Misting Bus #4 Deployment")}
-                      className="p-3 text-left rounded-lg border border-border/80 bg-base-950 hover:bg-base-800 hover:border-accent/50 transition group"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono text-xs font-bold text-accent">🚍 Dispatch Misting Bus #4</span>
-                        <span className="text-[10px] text-ink-400 font-mono">PRIORITY 1</span>
-                      </div>
-                      <p className="text-[11px] text-ink-400 mt-1">Deploy mobile evaporative misting unit to bus terminals & markets.</p>
-                    </button>
-
-                    <button
-                      onClick={() => handleDispatchAction("Cooling Shelter #2 Activation")}
-                      className="p-3 text-left rounded-lg border border-border/80 bg-base-950 hover:bg-base-800 hover:border-accent/50 transition group"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono text-xs font-bold text-accent">❄️ Open Cooling Shelter #2</span>
-                        <span className="text-[10px] text-ink-400 font-mono">PRIORITY 1</span>
-                      </div>
-                      <p className="text-[11px] text-ink-400 mt-1">Activate air-conditioned community shelter with hydration stations.</p>
-                    </button>
+                    {compoundRisk.recommendations.map((action) => (
+                      <button
+                        key={action.id}
+                        onClick={() => handleDispatchAction(action.title)}
+                        className="p-3 text-left rounded-lg border border-border/80 bg-base-950 hover:bg-base-800 hover:border-accent/50 transition group"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-xs font-bold text-accent">
+                            ⚡ {action.title}
+                          </span>
+                          <span className="text-[10px] text-ink-400 font-mono">
+                            PRIORITY {action.priority}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-ink-400 mt-1">{action.description}</p>
+                        <span className="inline-block mt-2 text-[9px] font-mono text-ink-500 bg-base-900 px-1.5 py-0.5 rounded">
+                          Trigger: {action.driverTrigger}
+                        </span>
+                      </button>
+                    ))}
                   </div>
 
                   {dispatchStatus && (

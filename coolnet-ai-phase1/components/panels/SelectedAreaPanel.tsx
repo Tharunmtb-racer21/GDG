@@ -4,10 +4,12 @@ import React, { useEffect, useState } from "react";
 import type { RiskForecast, WardSummary } from "@/lib/types";
 import { getCurrentWeather, NormalizedWeather } from "@/lib/services/weatherService";
 import { calculateHeatStress, HeatStressResult } from "@/lib/utils/heatStress";
-import { calculateCompoundRisk, CompoundRiskAssessment } from "@/lib/services/riskService";
+import {
+  calculateCompoundClimateRisk,
+  CompoundRiskResult,
+} from "@/lib/services/riskService";
 import { runXGBoostInference, MLPredictionResult } from "@/lib/services/realMlEngine";
 import { RiskBadge } from "@/components/ui/RiskBadge";
-import { DataStatusBadge } from "@/components/ui/mapcn";
 
 export interface SelectedAreaMeta {
   id: string;
@@ -32,7 +34,7 @@ export function SelectedAreaPanel({
   const [weather, setWeather] = useState<NormalizedWeather | null>(null);
   const [heatStress, setHeatStress] = useState<HeatStressResult | null>(null);
   const [mlPrediction, setMlPrediction] = useState<MLPredictionResult | null>(null);
-  const [compoundRisk, setCompoundRisk] = useState<CompoundRiskAssessment | null>(null);
+  const [compoundRisk, setCompoundRisk] = useState<CompoundRiskResult | null>(null);
 
   // Effective coordinates & name
   const areaName = selectedArea?.name || ward?.meta.name || "Delhi Metro";
@@ -40,7 +42,7 @@ export function SelectedAreaPanel({
   const lat = selectedArea?.lat ?? (ward ? ward.meta.centroid[0] : 28.6139);
   const lon = selectedArea?.lon ?? (ward ? ward.meta.centroid[1] : 77.2090);
 
-  // Fetch real-time weather & run XGBoost ML inference
+  // Fetch real-time weather & run XGBoost ML & Compound Risk inference
   useEffect(() => {
     let isMounted = true;
     setLoading(true);
@@ -70,11 +72,18 @@ export function SelectedAreaPanel({
         });
         setMlPrediction(ml);
 
-        // 3. Feed ML Heat Stress Prediction into Compound Risk Engine
+        // 3. CoolNet Compound Climate Risk Engine Call
         const gridVal = ward ? ward.snapshot.grid_stress : 68;
         const vulnVal = ward ? ward.snapshot.vulnerability_score : 58;
         const coolVal = ward ? ward.snapshot.cooling_access : 45;
-        const cr = calculateCompoundRisk(ml.heatStressScore, gridVal, vulnVal, coolVal);
+
+        const cr = calculateCompoundClimateRisk({
+          heatStress: ml.heatStressScore,
+          historicalAnomaly: ml.anomaly,
+          gridStress: gridVal,
+          vulnerability: vulnVal,
+          coolingAccess: coolVal,
+        });
         setCompoundRisk(cr);
 
         setLoading(false);
@@ -96,7 +105,7 @@ export function SelectedAreaPanel({
           NATIONAL VIEW
         </p>
         <p className="text-xs leading-relaxed text-ink-500 max-w-[220px]">
-          Click any State, District, or Ward on the map to run real-time XGBoost heat stress predictions.
+          Click any State, District, or Ward on the map to evaluate Compound Climate Risk.
         </p>
       </div>
     );
@@ -120,27 +129,76 @@ export function SelectedAreaPanel({
         <p className="text-xs font-medium text-ink-400">{stateRegion}</p>
       </div>
 
-      {/* Weather Status Indicator */}
-      <div className="flex items-center justify-between rounded-lg border border-border/80 bg-base-900/90 px-3 py-2">
-        <div className="flex items-center gap-2">
-          {loading ? (
-            <>
-              <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping" />
-              <span className="font-mono text-[11px] font-medium text-amber-400">
-                EVALUATING XGBOOST ML PIPELINE...
-              </span>
-            </>
-          ) : (
-            <>
-              <span className="h-2 w-2 rounded-full bg-emerald-400" />
-              <span className="font-mono text-[11px] font-medium text-emerald-400">
-                XGBOOST ML PREDICTION ACTIVE
-              </span>
-            </>
-          )}
+      {/* Alert Banner for High / Critical Risk */}
+      {compoundRisk && (compoundRisk.category === "HIGH" || compoundRisk.category === "CRITICAL") && (
+        <div className="rounded-md border border-red-500/50 bg-red-950/60 p-2.5 flex items-center justify-between animate-pulse">
+          <div className="flex items-center gap-2">
+            <span className="text-base">🚨</span>
+            <div>
+              <h4 className="font-mono text-[11px] font-bold uppercase text-red-300">
+                {compoundRisk.category} CLIMATE RISK ALERT
+              </h4>
+              <p className="text-[10px] text-red-200">Simultaneous Heat & Grid Overload</p>
+            </div>
+          </div>
         </div>
-        <DataStatusBadge />
-      </div>
+      )}
+
+      {/* Main Compound Risk Score Panel */}
+      {compoundRisk && (
+        <div className="rounded-lg border border-accent/40 bg-base-900 p-3.5 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="font-mono text-xs font-bold text-ink-100 uppercase">
+              COMPOUND CLIMATE RISK
+            </span>
+            <RiskBadge level={compoundRisk.category} />
+          </div>
+
+          <div className="flex items-baseline justify-between">
+            <div className="flex items-baseline gap-1">
+              <span className="font-mono text-3xl font-extrabold text-orange-400">
+                {compoundRisk.score}
+              </span>
+              <span className="font-mono text-xs text-ink-400">/100</span>
+            </div>
+
+            <div className="text-right font-mono text-[10px]">
+              <span className="text-ink-400 block">PRIMARY DRIVER</span>
+              <span className="text-accent font-bold uppercase">{compoundRisk.primaryDriver}</span>
+            </div>
+          </div>
+
+          {/* Sub-Risk Driver Bars */}
+          <div className="space-y-1.5 border-t border-border/40 pt-2 font-mono text-[10px]">
+            {compoundRisk.drivers.map((d, idx) => (
+              <div key={idx} className="space-y-0.5">
+                <div className="flex justify-between">
+                  <span className="text-ink-400">{d.factor}</span>
+                  <span className="font-bold text-ink-200">{d.score} / 100</span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-base-950 overflow-hidden border border-border/30">
+                  <div
+                    className="h-full bg-accent transition-all rounded-full"
+                    style={{ width: `${d.score}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* AI Explainability Diagnostic */}
+      {compoundRisk && (
+        <div className="rounded-lg border border-border/80 bg-base-950 p-3 space-y-1.5">
+          <h4 className="font-mono text-[11px] font-bold text-ink-100 uppercase">
+            WHY IS THIS AREA AT RISK?
+          </h4>
+          <p className="text-[11px] text-ink-300 leading-relaxed font-sans">
+            {compoundRisk.explanation}
+          </p>
+        </div>
+      )}
 
       {/* Real-time Weather Grid */}
       {weather && (
@@ -154,94 +212,15 @@ export function SelectedAreaPanel({
             <span className="text-[10px] text-ink-400 uppercase font-mono block">Feels Like</span>
             <span className="font-mono text-lg font-bold text-red-400 mt-0.5 block">{weather.apparentTemperature}°C</span>
           </div>
-
-          <div className="rounded-md border border-border/80 bg-base-950 p-2.5">
-            <span className="text-[10px] text-ink-400 uppercase font-mono block">Humidity</span>
-            <span className="font-mono text-lg font-bold text-cyan-400 mt-0.5 block">{weather.humidity}%</span>
-          </div>
-
-          <div className="rounded-md border border-border/80 bg-base-950 p-2.5">
-            <span className="text-[10px] text-ink-400 uppercase font-mono block">Wind Speed</span>
-            <span className="font-mono text-lg font-bold text-emerald-400 mt-0.5 block">{weather.windSpeed} km/h</span>
-          </div>
         </div>
       )}
 
-      {/* AI Heat Stress & Baseline Anomaly Card */}
-      {mlPrediction && (
-        <div className="rounded-lg border border-accent/40 bg-accent/5 p-3 space-y-2.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <span className="text-accent text-sm">🤖</span>
-              <h4 className="font-mono text-xs font-bold uppercase text-ink-100">
-                AI HEAT STRESS PREDICTION
-              </h4>
-            </div>
-            <span className="font-mono text-[10px] font-extrabold text-red-400 bg-red-950/60 px-2 py-0.5 rounded border border-red-500/30">
-              {mlPrediction.category}
-            </span>
-          </div>
-
-          <div className="flex items-baseline justify-between border-t border-border/40 pt-2">
-            <div>
-              <span className="text-[10px] font-mono text-ink-400 uppercase block">Predicted Score</span>
-              <span className="font-mono text-2xl font-extrabold text-red-400">
-                {mlPrediction.heatStressScore} <span className="text-xs text-ink-400 font-normal">/100</span>
-              </span>
-            </div>
-
-            <div className="text-right">
-              <span className="text-[10px] font-mono text-ink-400 uppercase block">4-Yr Baseline</span>
-              <span className="font-mono text-sm font-bold text-ink-200">
-                {mlPrediction.historicalBaseline} <span className="text-orange-400 text-xs font-semibold">(+{mlPrediction.anomaly})</span>
-              </span>
-            </div>
-          </div>
-
-          {/* Model Status Note */}
-          <div className="border-t border-border/40 pt-2 flex items-center justify-between text-[10px] font-mono text-ink-400">
-            <span>MODEL: {mlPrediction.model}</span>
-            <span className="text-emerald-400 font-bold">● {mlPrediction.status}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Compound Risk Card */}
-      {compoundRisk && (
-        <div className="rounded-lg border border-border/80 bg-base-900 p-3 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="font-mono text-xs font-bold text-ink-100 uppercase">
-              Compound Risk Score
-            </span>
-            <RiskBadge level={compoundRisk.risk_level} />
-          </div>
-
-          <div className="flex items-baseline gap-1">
-            <span className="font-mono text-3xl font-extrabold text-orange-400">
-              {compoundRisk.compound_risk_score}
-            </span>
-            <span className="font-mono text-xs text-ink-400">/100</span>
-          </div>
-
-          {/* Sub-Risk Bar Breakdown */}
-          <div className="space-y-1.5 border-t border-border/40 pt-2">
-            <div className="flex justify-between text-[10px]">
-              <span className="text-ink-400">AI Heat Stress (40%)</span>
-              <span className="font-mono font-bold text-red-400">{compoundRisk.heat_score}</span>
-            </div>
-
-            <div className="flex justify-between text-[10px]">
-              <span className="text-ink-400">Grid Strain (30%)</span>
-              <span className="font-mono font-bold text-yellow-400">{compoundRisk.grid_score}</span>
-            </div>
-
-            <div className="flex justify-between text-[10px]">
-              <span className="text-ink-400">Vulnerability (20%)</span>
-              <span className="font-mono font-bold text-blue-400">{compoundRisk.vulnerability_score}</span>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Data Source Honesty Footer */}
+      <div className="rounded-md border border-border/60 bg-base-950 p-2 text-[9px] font-mono flex flex-wrap justify-between text-ink-400">
+        <span>Weather: <strong className="text-emerald-400">● LIVE</strong></span>
+        <span>ML Engine: <strong className="text-emerald-400">● ACTIVE</strong></span>
+        <span>Grid: <strong className="text-amber-400">● DEMO</strong></span>
+      </div>
     </div>
   );
 }
