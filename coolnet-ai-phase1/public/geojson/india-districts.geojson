@@ -1,0 +1,590 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "district_id": "DT-TN-01",
+        "district_name": "Chennai",
+        "state_id": "IN-TN",
+        "state_name": "Tamil Nadu",
+        "centroid": [
+          80.27,
+          13.08
+        ],
+        "temperature": 39.5,
+        "heat_index": 47.1,
+        "grid_stress": 85,
+        "compound_risk": 89,
+        "vulnerability": 75
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.1,
+              13.2
+            ],
+            [
+              80.3,
+              13.2
+            ],
+            [
+              80.3,
+              12.9
+            ],
+            [
+              80.1,
+              12.9
+            ],
+            [
+              80.1,
+              13.2
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "district_id": "DT-TN-02",
+        "district_name": "Coimbatore",
+        "state_id": "IN-TN",
+        "state_name": "Tamil Nadu",
+        "centroid": [
+          76.95,
+          11.01
+        ],
+        "temperature": 37.9,
+        "heat_index": 43.6,
+        "grid_stress": 68,
+        "compound_risk": 74,
+        "vulnerability": 62
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              76.8,
+              11.2
+            ],
+            [
+              77.1,
+              11.2
+            ],
+            [
+              77.1,
+              10.8
+            ],
+            [
+              76.8,
+              10.8
+            ],
+            [
+              76.8,
+              11.2
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "district_id": "DT-TN-03",
+        "district_name": "Madurai",
+        "state_id": "IN-TN",
+        "state_name": "Tamil Nadu",
+        "centroid": [
+          78.11,
+          9.92
+        ],
+        "temperature": 40.1,
+        "heat_index": 46.8,
+        "grid_stress": 76,
+        "compound_risk": 81,
+        "vulnerability": 70
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              78,
+              10.1
+            ],
+            [
+              78.3,
+              10.1
+            ],
+            [
+              78.3,
+              9.7
+            ],
+            [
+              78,
+              9.7
+            ],
+            [
+              78,
+              10.1
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "district_id": "DT-TN-04",
+        "district_name": "Salem",
+        "state_id": "IN-TN",
+        "state_name": "Tamil Nadu",
+        "centroid": [
+          78.14,
+          11.66
+        ],
+        "temperature": 38.8,
+        "heat_index": 45,
+        "grid_stress": 71,
+        "compound_risk": 76,
+        "vulnerability": 65
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              78,
+              11.8
+            ],
+            [
+              78.3,
+              11.8
+            ],
+            [
+              78.3,
+              11.4
+            ],
+            [
+              78,
+              11.4
+            ],
+            [
+              78,
+              11.8
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "district_id": "DT-TN-05",
+        "district_name": "Tiruchirappalli",
+        "state_id": "IN-TN",
+        "state_name": "Tamil Nadu",
+        "centroid": [
+          78.7,
+          10.79
+        ],
+        "temperature": 39.2,
+        "heat_index": 45.8,
+        "grid_stress": 73,
+        "compound_risk": 78,
+        "vulnerability": 67
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              78.5,
+              11
+            ],
+            [
+              78.9,
+              11
+            ],
+            [
+              78.9,
+              10.6
+            ],
+            [
+              78.5,
+              10.6
+            ],
+            [
+              78.5,
+              11
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "district_id": "DT-MH-01",
+        "district_name": "Mumbai Metro",
+        "state_id": "IN-MH",
+        "state_name": "Maharashtra",
+        "centroid": [
+          72.87,
+          19.07
+        ],
+        "temperature": 37.8,
+        "heat_index": 46.2,
+        "grid_stress": 92,
+        "compound_risk": 91,
+        "vulnerability": 80
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              72.7,
+              19.3
+            ],
+            [
+              73,
+              19.3
+            ],
+            [
+              73,
+              18.8
+            ],
+            [
+              72.7,
+              18.8
+            ],
+            [
+              72.7,
+              19.3
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "district_id": "DT-MH-02",
+        "district_name": "Pune",
+        "state_id": "IN-MH",
+        "state_name": "Maharashtra",
+        "centroid": [
+          73.85,
+          18.52
+        ],
+        "temperature": 38.5,
+        "heat_index": 44.1,
+        "grid_stress": 79,
+        "compound_risk": 82,
+        "vulnerability": 68
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              73.6,
+              18.8
+            ],
+            [
+              74.1,
+              18.8
+            ],
+            [
+              74.1,
+              18.2
+            ],
+            [
+              73.6,
+              18.2
+            ],
+            [
+              73.6,
+              18.8
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "district_id": "DT-MH-03",
+        "district_name": "Nagpur",
+        "state_id": "IN-MH",
+        "state_name": "Maharashtra",
+        "centroid": [
+          79.08,
+          21.14
+        ],
+        "temperature": 44.1,
+        "heat_index": 51.5,
+        "grid_stress": 86,
+        "compound_risk": 92,
+        "vulnerability": 78
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              78.9,
+              21.4
+            ],
+            [
+              79.3,
+              21.4
+            ],
+            [
+              79.3,
+              20.9
+            ],
+            [
+              78.9,
+              20.9
+            ],
+            [
+              78.9,
+              21.4
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "district_id": "DT-DL-01",
+        "district_name": "Central Delhi",
+        "state_id": "IN-DL",
+        "state_name": "Delhi",
+        "centroid": [
+          77.21,
+          28.65
+        ],
+        "temperature": 43.6,
+        "heat_index": 50.8,
+        "grid_stress": 94,
+        "compound_risk": 96,
+        "vulnerability": 85
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.17,
+              28.67
+            ],
+            [
+              77.25,
+              28.67
+            ],
+            [
+              77.25,
+              28.63
+            ],
+            [
+              77.17,
+              28.63
+            ],
+            [
+              77.17,
+              28.67
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "district_id": "DT-DL-02",
+        "district_name": "New Delhi",
+        "state_id": "IN-DL",
+        "state_name": "Delhi",
+        "centroid": [
+          77.21,
+          28.63
+        ],
+        "temperature": 42.8,
+        "heat_index": 49.6,
+        "grid_stress": 88,
+        "compound_risk": 90,
+        "vulnerability": 72
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.18,
+              28.64
+            ],
+            [
+              77.24,
+              28.64
+            ],
+            [
+              77.24,
+              28.6
+            ],
+            [
+              77.18,
+              28.6
+            ],
+            [
+              77.18,
+              28.64
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "district_id": "DT-DL-03",
+        "district_name": "South Delhi",
+        "state_id": "IN-DL",
+        "state_name": "Delhi",
+        "centroid": [
+          77.22,
+          28.56
+        ],
+        "temperature": 43,
+        "heat_index": 50,
+        "grid_stress": 90,
+        "compound_risk": 92,
+        "vulnerability": 78
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.18,
+              28.6
+            ],
+            [
+              77.26,
+              28.6
+            ],
+            [
+              77.26,
+              28.52
+            ],
+            [
+              77.18,
+              28.52
+            ],
+            [
+              77.18,
+              28.6
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "district_id": "DT-KA-01",
+        "district_name": "Bengaluru Urban",
+        "state_id": "IN-KA",
+        "state_name": "Karnataka",
+        "centroid": [
+          77.59,
+          12.97
+        ],
+        "temperature": 36.2,
+        "heat_index": 41.5,
+        "grid_stress": 82,
+        "compound_risk": 83,
+        "vulnerability": 64
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.4,
+              13.2
+            ],
+            [
+              77.8,
+              13.2
+            ],
+            [
+              77.8,
+              12.7
+            ],
+            [
+              77.4,
+              12.7
+            ],
+            [
+              77.4,
+              13.2
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "district_id": "DT-KA-02",
+        "district_name": "Mysuru",
+        "state_id": "IN-KA",
+        "state_name": "Karnataka",
+        "centroid": [
+          76.64,
+          12.3
+        ],
+        "temperature": 35.1,
+        "heat_index": 39.8,
+        "grid_stress": 60,
+        "compound_risk": 62,
+        "vulnerability": 55
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              76.4,
+              12.5
+            ],
+            [
+              76.8,
+              12.5
+            ],
+            [
+              76.8,
+              12.1
+            ],
+            [
+              76.4,
+              12.1
+            ],
+            [
+              76.4,
+              12.5
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}
